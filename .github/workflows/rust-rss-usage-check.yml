@@ -1,0 +1,57 @@
+name: Run RSS usage check
+
+on:
+  pull_request:
+    branches: [ develop ]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  rss-usage:
+    runs-on: ubuntu-latest
+
+    # fork PRs get a read-only GITHUB_TOKEN regardless of the permissions above
+    # skip the whole job is such case
+    if: github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build ieee1905
+        run: cargo build --package ieee1905 --release
+
+      - name: Checking RSS usage
+        run: |
+          #
+          echo "Setting up network interfaces"
+          sudo ip link add ieee1905_end type veth peer name ieee1905_con
+          sudo ip link set ieee1905_end up
+          sudo ip link set ieee1905_con up
+          #
+          echo "Launching ieee1905"
+          TARGET_PID_FILE="rss_report_pid.txt"
+          sudo timeout 7s bash -c "./target/release/ieee1905 -i ieee1905_con --no-stdout-appender & echo \$! > $TARGET_PID_FILE; wait" &
+          #
+          echo "Waiting for ieee1905 to run"
+          sleep 5
+          TARGET_PID=$(sudo cat $TARGET_PID_FILE)
+          #
+          echo "Generating report"
+          echo "Memory report after running for 5s:
+          \`\`\`
+          OS: $(uname -srm)
+          $(sudo cat /proc/$TARGET_PID/status | grep -E "VmSize|VmRSS|VmHWM|RssAnon|RssFile")
+          \`\`\`
+          " > rss_report.txt
+
+      - name: Post RSS usage report comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: rss-report
+          path: rss_report.txt
