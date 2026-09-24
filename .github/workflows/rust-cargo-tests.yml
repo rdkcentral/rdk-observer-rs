@@ -16,4 +16,4 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Run cargo test
-        run: cargo test --workspace --exclude rbus-core --exclude rbus-sys --exclude rbus-provider
+        run: cargo test --workspace

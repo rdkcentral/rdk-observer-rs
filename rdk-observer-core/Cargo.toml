@@ -1,0 +1,10 @@
+[package]
+name = "rdk-observer-core"
+description = "Core observation types and behavior for rdk-observer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+

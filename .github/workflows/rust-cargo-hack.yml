@@ -24,4 +24,4 @@ jobs:
           tool: cargo-hack
 
       - name: Run cargo hack
-        run: cargo hack test --package ieee1905
+        run: cargo hack test --workspace

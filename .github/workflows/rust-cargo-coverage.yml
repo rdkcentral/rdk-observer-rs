@@ -31,7 +31,7 @@ jobs:
           tool: cargo-llvm-cov
 
       - name: Run cargo llvm-cov
-        run: cargo llvm-cov --package ieee1905 --summary-only --output-path coverage_report.txt
+        run: cargo llvm-cov --workspace --summary-only --output-path coverage_report.txt
 
       - name: Formatting Coverage Report
         run: |
