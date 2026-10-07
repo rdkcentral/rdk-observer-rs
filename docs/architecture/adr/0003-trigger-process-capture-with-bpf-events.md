@@ -37,7 +37,7 @@ Kernel lifecycle events reduce discovery latency for new processes, including sh
 ### Negative
 
 - BPF support, permissions, and available tracepoints vary across target kernels and deployments.
-- Ring-buffer events can be lost under load; reconciliation remains necessary.
+- Ring-buffer events can be lost under load.
 - If many events arrive at once, the observer must combine repeated requests for the same process and limit how many snapshots run at the same time.
 
 ## References

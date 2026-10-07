@@ -28,12 +28,18 @@ Storage here means block-device I/O activity. `/proc/diskstats` does not provide
 
 These procfs files provide the system-level values needed for periodic observation using a small number of reads. Keeping raw counters makes derived rates reproducible and avoids presenting cumulative CPU or disk activity as an instantaneous percentage or rate.
 
+System snapshots also provide the device-wide baseline needed to interpret and normalize per-PID observations. Aggregate CPU deltas provide context for per-PID CPU time, `MemTotal` and `MemAvailable` provide context for process memory usage, and block-device counters provide a system-level reference for process I/O. Comparing both views helps identify resource usage that cannot be attributed to a monitored process, including kernel activity and work performed by processes outside the selected set.
+
+This system-wide path complements rather than replaces per-PID sampling. It can run at a lower, independently configured frequency because it establishes overall context, while targeted per-PID workers can collect selected process metrics more frequently. The observations are correlated by timestamp; they are not expected to form an atomic snapshot or sum exactly because the sources are read at different times and expose different accounting boundaries.
+
 ## Consequences
 
 ### Positive
 
 - A single sampling path can collect system-wide DRAM, CPU, and storage I/O readings.
 - The same source data can be used to derive rates over different sampling intervals.
+- System-wide baselines can normalize and provide context for per-PID observations.
+- Differences between system and per-PID measurements can expose kernel, unmonitored, or otherwise unattributed resource usage.
 
 ### Negative
 

@@ -1,0 +1,264 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/28.2.8 Chrome/140.0.7339.240 Electron/38.4.0 Safari/537.36" version="28.2.8" pages="3">
+  <diagram id="496caC-0ieWcELdn3qGz" name="requirements">
+    <mxGraphModel dx="1653" dy="843" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="4cQvvuJoGjTRrafSjJ4e-1" parent="1" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;rdk-observer-rs&lt;/h1&gt;&lt;div&gt;&lt;h2 data-start=&quot;225&quot; data-end=&quot;248&quot; class=&quot;PDq2pG_selectionAnchorContainer&quot;&gt;Problem Being Solved&lt;/h2&gt;&lt;blockquote data-start=&quot;250&quot; data-end=&quot;507&quot;&gt;&lt;p class=&quot;isSelectedEnd&quot;&gt;It provides continuous, low-overhead observability of system resources across an RDK device, including CPU, DRAM, processes, network and I/O activity.&amp;nbsp;&lt;/p&gt;In a resource-constrained device, the main goal is to understand &lt;strong&gt;where the available resources are going&lt;/strong&gt; and which processes or kernel activities are consuming them. By combining system metrics, process-level information and Linux observability mechanisms, the component helps track resource usage over time, correlate transient events with their likely cause, and provide the data needed to evaluate the efficiency of current components and support future architectural decisions.&lt;/blockquote&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="260" width="730" x="20" y="10" as="geometry" />
+        </mxCell>
+        <mxCell id="4cQvvuJoGjTRrafSjJ4e-2" parent="1" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;&lt;br&gt;&lt;/h1&gt;&lt;h2 data-start=&quot;768&quot; data-end=&quot;790&quot; class=&quot;PDq2pG_selectionAnchorContainer&quot;&gt;Key requirements&lt;/h2&gt;&lt;div&gt;&lt;hr data-start=&quot;2045&quot; data-end=&quot;2048&quot;&gt;&lt;/div&gt;&lt;h3 data-start=&quot;792&quot; data-end=&quot;812&quot;&gt;Process registry&lt;/h3&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;li data-section-id=&quot;1b3sess&quot; data-start=&quot;79&quot; data-end=&quot;125&quot;&gt;Track running processes and their lifecycle.&lt;span aria-hidden=&quot;true&quot; class=&quot;PDq2pG_selectionAnchor&quot;&gt;&lt;/span&gt;&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;1f7tewu&quot; data-start=&quot;126&quot; data-end=&quot;178&quot;&gt;Maintain stable identity using &lt;code data-start=&quot;159&quot; data-end=&quot;177&quot;&gt;PID + start_time&lt;/code&gt;.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;vuowou&quot; data-start=&quot;179&quot; data-end=&quot;252&quot;&gt;Collect metadata such as name, executable, parent PID and command line.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;htitsf&quot; data-start=&quot;253&quot; data-end=&quot;310&quot;&gt;Keep current and recent historical process information.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;6amu0q&quot; data-start=&quot;311&quot; data-end=&quot;369&quot;&gt;Provide a shared process registry to the other monitors.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;1e9zygi&quot; data-start=&quot;370&quot; data-end=&quot;400&quot;&gt;Minimize discovery overhead.&lt;/li&gt;&lt;br&gt;&lt;/ul&gt;&lt;hr data-start=&quot;938&quot; data-end=&quot;941&quot;&gt;&lt;h3 data-start=&quot;943&quot; data-end=&quot;975&quot;&gt;CPU resource management&lt;/h3&gt;&lt;ul data-start=&quot;977&quot; data-end=&quot;1150&quot;&gt;&lt;li data-section-id=&quot;ge0pe1&quot; data-start=&quot;427&quot; data-end=&quot;461&quot;&gt;Monitor overall CPU utilization.&lt;span aria-hidden=&quot;true&quot; class=&quot;PDq2pG_selectionAnchor&quot;&gt;&lt;/span&gt;&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;5s15ra&quot; data-start=&quot;462&quot; data-end=&quot;492&quot;&gt;Track CPU usage per process.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;yp6nu8&quot; data-start=&quot;493&quot; data-end=&quot;525&quot;&gt;Measure load and CPU pressure.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;10axerk&quot; data-start=&quot;526&quot; data-end=&quot;570&quot;&gt;Track context switches.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;1gdbi10&quot; data-start=&quot;571&quot; data-end=&quot;654&quot;&gt;Collect relevant perf/PMU counters.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;18ywhx8&quot; data-start=&quot;655&quot; data-end=&quot;705&quot;&gt;Detect short CPU peaks and unusual CPU activity.&lt;/li&gt;&lt;br&gt;&lt;h3 data-section-id=&quot;1v8ygka&quot; data-start=&quot;707&quot; data-end=&quot;732&quot;&gt;&lt;/h3&gt;&lt;/ul&gt;&lt;hr data-start=&quot;1152&quot; data-end=&quot;1155&quot;&gt;&lt;h3 data-start=&quot;1157&quot; data-end=&quot;1174&quot;&gt;DRAM resource management&lt;/h3&gt;&lt;ul data-start=&quot;1176&quot; data-end=&quot;1327&quot;&gt;&lt;li data-section-id=&quot;1n0z7fv&quot; data-start=&quot;733&quot; data-end=&quot;774&quot;&gt;Monitor total, available and used DRAM.&lt;span aria-hidden=&quot;true&quot; class=&quot;PDq2pG_selectionAnchor&quot;&gt;&lt;/span&gt;&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;5w31pl&quot; data-start=&quot;775&quot; data-end=&quot;837&quot;&gt;Track memory usage per process using RSS/PSS/private memory.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;1elukzg&quot; data-start=&quot;838&quot; data-end=&quot;881&quot;&gt;Monitor page cache and kernel slab usage.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;128hblt&quot; data-start=&quot;882&quot; data-end=&quot;916&quot;&gt;Track memory pressure using PSI.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;17e510r&quot; data-start=&quot;917&quot; data-end=&quot;980&quot;&gt;Monitor page faults, reclaim, swap and other memory activity.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;vb4lmv&quot; data-start=&quot;981&quot; data-end=&quot;1040&quot;&gt;Detect memory growth, peaks and potential OOM conditions.&lt;/li&gt;&lt;/ul&gt;&lt;h3 data-start=&quot;1334&quot; data-end=&quot;1357&quot;&gt;&lt;br&gt;&lt;/h3&gt;" vertex="1">
+          <mxGeometry height="820" width="600" x="30" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="4cQvvuJoGjTRrafSjJ4e-3" parent="1" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;&lt;br&gt;&lt;/h1&gt;&lt;div&gt;&lt;h2 data-start=&quot;768&quot; data-end=&quot;790&quot; class=&quot;PDq2pG_selectionAnchorContainer&quot;&gt;&lt;br&gt;&lt;/h2&gt;&lt;/div&gt;&lt;h3 data-start=&quot;1534&quot; data-end=&quot;1559&quot; class=&quot;PDq2pG_selectionAnchorContainer&quot;&gt;&lt;hr data-start=&quot;2045&quot; data-end=&quot;2048&quot;&gt;&lt;/h3&gt;&lt;h3 data-start=&quot;1534&quot; data-end=&quot;1559&quot; class=&quot;PDq2pG_selectionAnchorContainer&quot;&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;&lt;font style=&quot;&quot;&gt;Storage resource monitor&lt;/font&gt;&lt;font style=&quot;font-size: 14px;&quot;&gt;.&lt;/font&gt;&lt;/span&gt;&lt;/h3&gt;&lt;ul data-start=&quot;1561&quot; data-end=&quot;1615&quot;&gt;&lt;li data-section-id=&quot;17huq1n&quot; data-start=&quot;1351&quot; data-end=&quot;1396&quot;&gt;Monitor system storage read/write activity.&lt;span aria-hidden=&quot;true&quot; class=&quot;PDq2pG_selectionAnchor&quot;&gt;&lt;/span&gt;&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;kf0s7d&quot; data-start=&quot;1397&quot; data-end=&quot;1427&quot;&gt;Track I/O usage per process.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;lonyd0&quot; data-start=&quot;1428&quot; data-end=&quot;1493&quot;&gt;Monitor I/O operations, throughput and latency where available.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;1m0nwbt&quot; data-start=&quot;1494&quot; data-end=&quot;1525&quot;&gt;Track I/O pressure using PSI.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;9vz16g&quot; data-start=&quot;1526&quot; data-end=&quot;1588&quot;&gt;Detect processes generating unusually high storage activity.&lt;/li&gt;&lt;/ul&gt;&lt;h3 data-start=&quot;1654&quot; data-end=&quot;1680&quot;&gt;&lt;br&gt;&lt;/h3&gt;&lt;hr data-start=&quot;2045&quot; data-end=&quot;2048&quot;&gt;&lt;h3 data-start=&quot;2050&quot; data-end=&quot;2075&quot;&gt;Network resource monitor&lt;/h3&gt;&lt;ul data-start=&quot;2268&quot; data-end=&quot;2378&quot;&gt;&lt;br&gt;&lt;li data-section-id=&quot;uuondn&quot; data-start=&quot;1071&quot; data-end=&quot;1111&quot;&gt;Monitor traffic per network interface.&lt;span aria-hidden=&quot;true&quot; class=&quot;PDq2pG_selectionAnchor&quot;&gt;&lt;/span&gt;&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;1o4ttah&quot; data-start=&quot;1112&quot; data-end=&quot;1144&quot;&gt;Track RX/TX bytes and packets.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;iykjqw&quot; data-start=&quot;1145&quot; data-end=&quot;1179&quot;&gt;Monitor packet drops and errors.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;1155mo5&quot; data-start=&quot;1180&quot; data-end=&quot;1221&quot;&gt;Track interface state and link changes.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;1neh8hf&quot; data-start=&quot;1222&quot; data-end=&quot;1266&quot;&gt;Collect relevant network-stack statistics.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;143m0h1&quot; data-start=&quot;1267&quot; data-end=&quot;1324&quot;&gt;Detect unusual traffic or network resource consumption.&lt;/li&gt;&lt;/ul&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;&lt;hr data-start=&quot;2239&quot; data-end=&quot;2242&quot;&gt;&lt;h3 data-start=&quot;2244&quot; data-end=&quot;2266&quot;&gt;Aggregator and metrics manager&lt;/h3&gt;&lt;ul data-start=&quot;2268&quot; data-end=&quot;2378&quot;&gt;&lt;li data-section-id=&quot;okrj8k&quot; data-start=&quot;1623&quot; data-end=&quot;1669&quot;&gt;Receive metrics from all monitoring workers.&lt;span aria-hidden=&quot;true&quot; class=&quot;PDq2pG_selectionAnchor&quot;&gt;&lt;/span&gt;&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;ujdnc0&quot; data-start=&quot;1670&quot; data-end=&quot;1736&quot;&gt;Correlate CPU, DRAM, network and I/O information with processes.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;31adtu&quot; data-start=&quot;1737&quot; data-end=&quot;1775&quot;&gt;Maintain short-term historical data.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;rh7oro&quot; data-start=&quot;1776&quot; data-end=&quot;1823&quot;&gt;Calculate averages, peaks, deltas and trends.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;tis59c&quot; data-start=&quot;1824&quot; data-end=&quot;1879&quot;&gt;Reduce high-frequency samples into compact telemetry.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;1an5jm8&quot; data-start=&quot;1880&quot; data-end=&quot;1934&quot;&gt;Control the frequency at which metrics are exported.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;u3nnmx&quot; data-start=&quot;1935&quot; data-end=&quot;1992&quot;&gt;Track the overhead introduced by the&amp;nbsp;&lt;font face=&quot;monospace&quot;&gt;component&lt;/font&gt;&amp;nbsp;itself.&lt;br&gt;&lt;/li&gt;&lt;br&gt;&lt;br&gt;&lt;p data-start=&quot;1994&quot; data-end=&quot;2044&quot;&gt;&lt;/p&gt;&lt;/ul&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="831" width="450" x="620" y="259" as="geometry" />
+        </mxCell>
+        <mxCell id="RI70U_HzIiw_obVcrXjU-1" parent="1" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;&lt;span style=&quot;font-size: 12px;&quot;&gt;Document-name: rdk-observer-requirements&lt;/span&gt;&lt;/h1&gt;&lt;div&gt;&lt;span style=&quot;font-size: 12px; font-weight: 400;&quot;&gt;Document status:&amp;nbsp; Proposal/Draft&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;font-size: 12px; font-weight: 400;&quot;&gt;&lt;br&gt;&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;font-size: 12px; font-weight: 400;&quot;&gt;Author: Jose Diaz Martinez (RDKm)&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;font-size: 12px; font-weight: 400;&quot;&gt;&lt;br&gt;&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;font-size: 12px; font-weight: 400;&quot;&gt;Date: 5-08-2026&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="120" width="280" x="1360" y="1030" as="geometry" />
+        </mxCell>
+        <mxCell id="gghMOGMlt56hx43XYPKQ-1" parent="1" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;&lt;br&gt;&lt;/h1&gt;&lt;div&gt;&lt;h2 data-start=&quot;768&quot; data-end=&quot;790&quot; class=&quot;PDq2pG_selectionAnchorContainer&quot;&gt;&lt;br&gt;&lt;/h2&gt;&lt;/div&gt;&lt;h3 data-start=&quot;1534&quot; data-end=&quot;1559&quot; class=&quot;PDq2pG_selectionAnchorContainer&quot;&gt;&lt;hr data-start=&quot;2045&quot; data-end=&quot;2048&quot;&gt;&lt;/h3&gt;&lt;h3 data-start=&quot;1534&quot; data-end=&quot;1559&quot; class=&quot;PDq2pG_selectionAnchorContainer&quot;&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;&lt;font style=&quot;&quot;&gt;Collector (External)&lt;/font&gt;&lt;font style=&quot;font-size: 14px;&quot;&gt;.&lt;/font&gt;&lt;/span&gt;&lt;/h3&gt;&lt;ul data-start=&quot;1561&quot; data-end=&quot;1615&quot;&gt;&lt;li data-section-id=&quot;17huq1n&quot; data-start=&quot;1351&quot; data-end=&quot;1396&quot;&gt;Collect metrics from rdk-observer and store them.&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;kf0s7d&quot; data-start=&quot;1397&quot; data-end=&quot;1427&quot;&gt;Provide dashboards and initial analysis.&lt;/li&gt;&lt;br&gt;&lt;li data-section-id=&quot;lonyd0&quot; data-start=&quot;1428&quot; data-end=&quot;1493&quot;&gt;Potentially provide input to an AI model for deeper analysis.&lt;/li&gt;&lt;/ul&gt;" vertex="1">
+          <mxGeometry height="351" width="430" x="1150" y="259" as="geometry" />
+        </mxCell>
+        <mxCell id="RsaMykFj28Giqek2baSY-1" parent="1" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;&lt;br&gt;&lt;/h1&gt;&lt;div&gt;&lt;h2 data-start=&quot;225&quot; data-end=&quot;248&quot; class=&quot;PDq2pG_selectionAnchorContainer&quot;&gt;Deliverables&lt;/h2&gt;&lt;blockquote data-start=&quot;250&quot; data-end=&quot;507&quot;&gt;&lt;p class=&quot;isSelectedEnd&quot;&gt;&lt;font style=&quot;font-size: 18px;&quot;&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;We should define clear non-functional deliverables for RDK-Observer, including maximum storage footprint, CPU and DRAM usage, and portability across RDK-B platforms. The component can also run inside a dedicated &lt;/span&gt;&lt;strong data-start=&quot;212&quot; data-end=&quot;222&quot; style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;cgroup&lt;/strong&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;, allowing us to enforce and validate resource limits during operation.&lt;/span&gt;&lt;/font&gt;&lt;/p&gt;&lt;p class=&quot;isSelectedEnd&quot;&gt;&lt;font style=&quot;font-size: 18px;&quot;&gt;&lt;/font&gt;&lt;/p&gt;&lt;h3 data-start=&quot;792&quot; data-end=&quot;812&quot;&gt;Initial resource targets for RDK-Observer are approximately &lt;strong data-start=&quot;197&quot; data-end=&quot;231&quot;&gt;5 MB maximum storage footprint&lt;/strong&gt;, &lt;strong data-start=&quot;233&quot; data-end=&quot;261&quot;&gt;10 MB maximum DRAM usage&lt;/strong&gt;, and &lt;strong data-start=&quot;267&quot; data-end=&quot;295&quot;&gt;below 5% CPU utilization&lt;/strong&gt; under normal operation. The component will run in a dedicated &lt;strong data-start=&quot;358&quot; data-end=&quot;368&quot;&gt;cgroup&lt;/strong&gt; so these resource limits can be measured and, where appropriate, enforced.&lt;/h3&gt;&lt;/blockquote&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="260" width="730" x="840" y="10" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="deliverables" id="026U_uGGw09mP5LJRRC6">
+    <mxGraphModel dx="2361" dy="1204" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="DBbj5t6UB-s62zDGaamE-0" />
+        <mxCell id="DBbj5t6UB-s62zDGaamE-1" parent="DBbj5t6UB-s62zDGaamE-0" />
+        <mxCell id="DBbj5t6UB-s62zDGaamE-2" parent="DBbj5t6UB-s62zDGaamE-1" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;rdk-observer-rs&lt;/h1&gt;&lt;div&gt;&lt;h2 data-start=&quot;225&quot; data-end=&quot;248&quot; class=&quot;PDq2pG_selectionAnchorContainer&quot;&gt;How we run it&lt;/h2&gt;&lt;blockquote data-start=&quot;250&quot; data-end=&quot;507&quot;&gt;&lt;p&gt;&lt;font style=&quot;font-size: 14px;&quot;&gt;dk-observer --cpu&lt;/font&gt;&lt;/p&gt;&lt;p&gt;&lt;font size=&quot;3&quot;&gt;rdk-observer --memory&lt;/font&gt;&lt;/p&gt;&lt;p&gt;&lt;font size=&quot;3&quot;&gt;rdk-observer --process&lt;/font&gt;&lt;/p&gt;&lt;p&gt;&lt;font size=&quot;3&quot;&gt;rdk-observer --network&lt;/font&gt;&lt;/p&gt;&lt;p&gt;&lt;font size=&quot;3&quot;&gt;rdk-observer --io&lt;/font&gt;&lt;/p&gt;&lt;p&gt;&lt;font size=&quot;3&quot;&gt;rdk-observer --all&lt;/font&gt;&lt;/p&gt;&lt;p&gt;&lt;font size=&quot;3&quot;&gt;rdk-observer --cpu --interval 1s&lt;/font&gt;&lt;/p&gt;&lt;p&gt;&lt;font size=&quot;3&quot;&gt;rdk-observer --memory --process --interval 5s&lt;/font&gt;&lt;/p&gt;&lt;/blockquote&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="320" width="730" x="20" y="10" as="geometry" />
+        </mxCell>
+        <mxCell id="DBbj5t6UB-s62zDGaamE-5" parent="DBbj5t6UB-s62zDGaamE-1" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;&lt;span style=&quot;font-size: 12px;&quot;&gt;Document-name: rdk-observer-requirements&lt;/span&gt;&lt;/h1&gt;&lt;div&gt;&lt;span style=&quot;font-size: 12px; font-weight: 400;&quot;&gt;Document status:&amp;nbsp; Proposal/Draft&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;font-size: 12px; font-weight: 400;&quot;&gt;&lt;br&gt;&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;font-size: 12px; font-weight: 400;&quot;&gt;Author: Jose Diaz Martinez (RDKm)&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;font-size: 12px; font-weight: 400;&quot;&gt;&lt;br&gt;&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;font-size: 12px; font-weight: 400;&quot;&gt;Date: 5-08-2026&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="120" width="280" x="1360" y="1030" as="geometry" />
+        </mxCell>
+        <mxCell id="XPjNIpuIiZQk1vtvkv96-2" parent="DBbj5t6UB-s62zDGaamE-1" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;per-process record&lt;/h1&gt;&lt;h2 data-start=&quot;768&quot; data-end=&quot;790&quot; class=&quot;PDq2pG_selectionAnchorContainer&quot;&gt;&lt;/h2&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;font style=&quot;font-size: 14px;&quot;&gt;{&lt;/font&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;font size=&quot;3&quot;&gt;&amp;nbsp; &quot;pid&quot;: 5962,&lt;/font&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;font size=&quot;3&quot;&gt;&amp;nbsp; &quot;name&quot;: &quot;example-component&quot;,&lt;/font&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;font size=&quot;3&quot;&gt;&amp;nbsp; &quot;cpu_percent&quot;: 4.7,&lt;/font&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;font size=&quot;3&quot;&gt;&amp;nbsp; &quot;rss_kb&quot;: 42352,&lt;/font&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;font size=&quot;3&quot;&gt;&amp;nbsp; &quot;pss_kb&quot;: 35989,&lt;/font&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;font size=&quot;3&quot;&gt;&amp;nbsp; &quot;private_kb&quot;: 30564,&lt;/font&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;font size=&quot;3&quot;&gt;&amp;nbsp; &quot;swap_kb&quot;: 0,&lt;/font&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;font size=&quot;3&quot;&gt;&amp;nbsp; &quot;read_bytes&quot;: 1048576,&lt;/font&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;font size=&quot;3&quot;&gt;&amp;nbsp; &quot;write_bytes&quot;: 524288,&lt;/font&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;font size=&quot;3&quot;&gt;&amp;nbsp; &quot;minor_faults&quot;: 2341,&lt;/font&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;font size=&quot;3&quot;&gt;&amp;nbsp; &quot;major_faults&quot;: 2,&lt;/font&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;font size=&quot;3&quot;&gt;&amp;nbsp; &quot;threads&quot;: 14,&lt;/font&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;font size=&quot;3&quot;&gt;&amp;nbsp; &quot;fd_count&quot;: 74&lt;/font&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;font size=&quot;3&quot;&gt;}&lt;/font&gt;&lt;/ul&gt;&lt;/ul&gt;" vertex="1">
+          <mxGeometry height="380" width="400" x="1160" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="2Z09R03nmHc2qlkiefjQ-0" edge="1" parent="DBbj5t6UB-s62zDGaamE-1" source="XPjNIpuIiZQk1vtvkv96-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.25;exitY=1;exitDx=0;exitDy=0;" target="XPjNIpuIiZQk1vtvkv96-4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="2Z09R03nmHc2qlkiefjQ-1" edge="1" parent="DBbj5t6UB-s62zDGaamE-1" source="XPjNIpuIiZQk1vtvkv96-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" target="XPjNIpuIiZQk1vtvkv96-5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="2Z09R03nmHc2qlkiefjQ-2" edge="1" parent="DBbj5t6UB-s62zDGaamE-1" source="XPjNIpuIiZQk1vtvkv96-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.75;exitY=1;exitDx=0;exitDy=0;" target="XPjNIpuIiZQk1vtvkv96-2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="XPjNIpuIiZQk1vtvkv96-3" parent="DBbj5t6UB-s62zDGaamE-1" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;&lt;br&gt;&lt;/h1&gt;&lt;h2 data-start=&quot;768&quot; data-end=&quot;790&quot; class=&quot;PDq2pG_selectionAnchorContainer&quot;&gt;What we measure&lt;/h2&gt;&lt;div&gt;&lt;hr data-start=&quot;2045&quot; data-end=&quot;2048&quot;&gt;&lt;/div&gt;&lt;h3 data-start=&quot;792&quot; data-end=&quot;812&quot;&gt;&lt;font style=&quot;font-size: 18px;&quot;&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255)); font-weight: normal;&quot;&gt;RDK-Observer will collect both &lt;/span&gt;&lt;strong data-start=&quot;31&quot; data-end=&quot;46&quot; style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;system-wide&lt;/strong&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255)); font-weight: normal;&quot;&gt; and &lt;/span&gt;&lt;strong data-start=&quot;51&quot; data-end=&quot;66&quot; style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;per-process&lt;/strong&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255)); font-weight: normal;&quot;&gt; metrics. Global measurements will provide visibility into overall CPU, DRAM, network and I/O utilization, while per-process measurements will identify which components are responsible for resource consumption.&lt;br&gt;&lt;/span&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255)); font-weight: normal;&quot;&gt;Per-process metrics will include items such as &lt;/span&gt;&lt;strong data-start=&quot;325&quot; data-end=&quot;423&quot; style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;CPU usage, RSS/PSS memory, swap, page faults, disk I/O, thread count and open file descriptors&lt;/strong&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255)); font-weight: normal;&quot;&gt;, allowing system-level changes to be correlated with individual RDK components.&lt;/span&gt;.&lt;/font&gt;&lt;/h3&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;br&gt;&lt;/ul&gt;" vertex="1">
+          <mxGeometry height="310" width="600" x="500" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="XPjNIpuIiZQk1vtvkv96-4" parent="DBbj5t6UB-s62zDGaamE-1" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;system record&lt;/h1&gt;&lt;h2 data-start=&quot;768&quot; data-end=&quot;790&quot; class=&quot;PDq2pG_selectionAnchorContainer&quot;&gt;&lt;/h2&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;{&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &quot;timestamp&quot;: &quot;2026-08-24T13:23:10Z&quot;,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &quot;type&quot;: &quot;system&quot;,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &quot;cpu&quot;: {&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &quot;usage_percent&quot;: 21.4,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &quot;user_percent&quot;: 12.1,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &quot;system_percent&quot;: 7.8,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &quot;iowait_percent&quot;: 1.5&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; },&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &quot;memory&quot;: {&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &quot;total_kb&quot;: 1048576,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &quot;available_kb&quot;: 312400,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &quot;used_kb&quot;: 736176,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &quot;cached_kb&quot;: 124800,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &quot;swap_used_kb&quot;: 0&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; },&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &quot;io&quot;: {&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &quot;read_bytes_per_sec&quot;: 245760,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &quot;write_bytes_per_sec&quot;: 98304&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; },&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &quot;network&quot;: {&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &quot;rx_bytes_per_sec&quot;: 1250000,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &quot;tx_bytes_per_sec&quot;: 420000&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; },&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &quot;processes&quot;: {&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &quot;running&quot;: 3,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &quot;total&quot;: 142&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; }&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;}&lt;/span&gt;&lt;/ul&gt;&lt;/ul&gt;&lt;/ul&gt;" vertex="1">
+          <mxGeometry height="560" width="400" x="50" y="500" as="geometry" />
+        </mxCell>
+        <mxCell id="XPjNIpuIiZQk1vtvkv96-5" parent="DBbj5t6UB-s62zDGaamE-1" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" value="&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 24px;&quot;&gt;&lt;b&gt;component-registry&lt;br&gt;&lt;/b&gt;&lt;/span&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&lt;br&gt;{&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &quot;timestamp&quot;: &quot;2026-08-24T13:25:10Z&quot;,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &quot;processes&quot;: [&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; {&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &amp;nbsp; &quot;pid&quot;: 5962,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &amp;nbsp; &quot;ppid&quot;: 1,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &amp;nbsp; &quot;name&quot;: &quot;ComponentExample&quot;,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &amp;nbsp; &quot;executable&quot;: &quot;/usr/bin/ComponentExample&quot;,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &amp;nbsp; &quot;cmdline&quot;: &quot;/usr/bin/ComponentExample&quot;,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &amp;nbsp; &quot;uid&quot;: 0,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &amp;nbsp; &quot;gid&quot;: 0,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &amp;nbsp; &quot;start_time&quot;: &quot;2026-08-24T11:03:42Z&quot;,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &amp;nbsp; &quot;end_time&quot;: null,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &amp;nbsp; &quot;cgroup&quot;: &quot;/system.slice/component-example.service&quot;,&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; &amp;nbsp; &quot;state&quot;: &quot;running&quot;&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; &amp;nbsp; }&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&amp;nbsp; ]&lt;/span&gt;&lt;/ul&gt;&lt;ul data-start=&quot;814&quot; data-end=&quot;936&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;}&lt;/span&gt;&lt;/ul&gt;&lt;/ul&gt;&lt;/ul&gt;" vertex="1">
+          <mxGeometry height="380" width="480" x="530" y="480" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="stack" id="E4PwH6YgfZP8AMUY876Z">
+    <mxGraphModel dx="3827" dy="909" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="kocFCEZ6Sb0B8-v6VLZV-1" value="" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="40" y="139" width="1094" height="280" as="geometry" />
+        </mxCell>
+        <mxCell id="kocFCEZ6Sb0B8-v6VLZV-3" value="KERNEL" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="163" y="629" width="639" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="fwCodrEMv8pOPvsuoiWe-5" value="COLLECTOR" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="900" y="503" width="230" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="fwCodrEMv8pOPvsuoiWe-11" value="procfs (crate)" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="191" y="360" width="183" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="S0sB-FIMMUrAgpl7bArp-20" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="1" source="nnn1V_Bb02M81akU0zJo-1" target="S0sB-FIMMUrAgpl7bArp-2" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="S0sB-FIMMUrAgpl7bArp-21" value="tokio::spawn" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" parent="S0sB-FIMMUrAgpl7bArp-20" connectable="0" vertex="1">
+          <mxGeometry x="-0.4895" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="nnn1V_Bb02M81akU0zJo-1" value="main" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="331.5" y="150" width="310" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="nnn1V_Bb02M81akU0zJo-8" value="" style="shape=flexArrow;endArrow=classic;html=1;rounded=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=0.54;exitY=0.95;exitDx=0;exitDy=0;exitPerimeter=0;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="1013.8800000000001" y="379" as="sourcePoint" />
+            <mxPoint x="1014" y="503" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="nnn1V_Bb02M81akU0zJo-9" value="http-push" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" parent="nnn1V_Bb02M81akU0zJo-8" connectable="0" vertex="1">
+          <mxGeometry x="-0.08" y="2" relative="1" as="geometry">
+            <mxPoint x="35" y="-16" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="nnn1V_Bb02M81akU0zJo-12" value="" style="endArrow=none;dashed=1;html=1;dashPattern=1 3;strokeWidth=2;rounded=0;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="915" y="472.5" as="sourcePoint" />
+            <mxPoint x="1133" y="472.5" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="nnn1V_Bb02M81akU0zJo-13" value="LAN" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="1109" y="470" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="MrPtO67iSSpRUpPXrHFt-5" value="reqwest (crate)" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="899" y="360" width="222" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="MrPtO67iSSpRUpPXrHFt-6" value="" style="shape=flexArrow;endArrow=classic;startArrow=classic;html=1;rounded=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" parent="1" source="kocFCEZ6Sb0B8-v6VLZV-2" target="fwCodrEMv8pOPvsuoiWe-11" edge="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="150" y="439" as="sourcePoint" />
+            <mxPoint x="250" y="339" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v5tY_pHnxjviGyY9Ucs--1" value="process&lt;div&gt;registry&lt;/div&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;" parent="1" vertex="1">
+          <mxGeometry x="90" y="180" width="60" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="v5tY_pHnxjviGyY9Ucs--7" value="sysfs (crate)" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="395" y="360" width="183" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="jLv2CzifBeMV18eMbmW--1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.25;entryDx=0;entryDy=0;" parent="1" source="v5tY_pHnxjviGyY9Ucs--8" target="nnn1V_Bb02M81akU0zJo-1" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="870" y="370" />
+              <mxPoint x="870" y="157.5" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v5tY_pHnxjviGyY9Ucs--8" value="aya (crate)" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="623" y="360" width="183" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="v5tY_pHnxjviGyY9Ucs--10" value="eBPF" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="619" y="513" width="183" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="v5tY_pHnxjviGyY9Ucs--11" value="" style="shape=flexArrow;endArrow=classic;startArrow=classic;html=1;rounded=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" parent="1" source="v5tY_pHnxjviGyY9Ucs--9" target="v5tY_pHnxjviGyY9Ucs--7" edge="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="484" y="453" as="sourcePoint" />
+            <mxPoint x="484" y="389" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v5tY_pHnxjviGyY9Ucs--12" value="" style="shape=flexArrow;endArrow=classic;startArrow=classic;html=1;rounded=0;entryX=0.47;entryY=1.05;entryDx=0;entryDy=0;entryPerimeter=0;width=14;startSize=8;" parent="1" source="v5tY_pHnxjviGyY9Ucs--10" target="v5tY_pHnxjviGyY9Ucs--8" edge="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="695" y="452" as="sourcePoint" />
+            <mxPoint x="695" y="388" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v5tY_pHnxjviGyY9Ucs--14" value="metric-collector-worker" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="909.5" y="210" width="201.5" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="v5tY_pHnxjviGyY9Ucs--16" value="snapshot-collection" style="swimlane;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="163" y="449" width="430" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="kocFCEZ6Sb0B8-v6VLZV-2" value="/proc" style="rounded=1;whiteSpace=wrap;html=1;" parent="v5tY_pHnxjviGyY9Ucs--16" vertex="1">
+          <mxGeometry x="28" y="64" width="183" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="v5tY_pHnxjviGyY9Ucs--9" value="/sys" style="rounded=1;whiteSpace=wrap;html=1;" parent="v5tY_pHnxjviGyY9Ucs--16" vertex="1">
+          <mxGeometry x="232" y="66" width="183" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="v5tY_pHnxjviGyY9Ucs--17" value="event-drive-collection" style="swimlane;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="604.5" y="449" width="206.5" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="v5tY_pHnxjviGyY9Ucs--18" value="prost-build (crate)" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="899" y="289" width="222" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="v5tY_pHnxjviGyY9Ucs--19" value="prost-types (crate)" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="899" y="314" width="222" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="v5tY_pHnxjviGyY9Ucs--21" value="" style="shape=flexArrow;endArrow=classic;startArrow=classic;html=1;rounded=0;" parent="1" target="v5tY_pHnxjviGyY9Ucs--14" edge="1">
+          <mxGeometry width="100" height="100" relative="1" as="geometry">
+            <mxPoint x="150" y="219" as="sourcePoint" />
+            <mxPoint x="853.25" y="219" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v5tY_pHnxjviGyY9Ucs--24" value="mpsc-channel" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" parent="v5tY_pHnxjviGyY9Ucs--21" connectable="0" vertex="1">
+          <mxGeometry x="0.0963" y="-3" relative="1" as="geometry">
+            <mxPoint x="-326" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="S0sB-FIMMUrAgpl7bArp-1" value="" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="176.5" y="262" width="620" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="S0sB-FIMMUrAgpl7bArp-2" value="monitor-per-process-worker" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" parent="1" vertex="1">
+          <mxGeometry x="395" y="259" width="183" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="S0sB-FIMMUrAgpl7bArp-7" value="" style="endArrow=classic;startArrow=classic;html=1;rounded=0;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="255.75" y="261" as="sourcePoint" />
+            <mxPoint x="255.75" y="231" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="S0sB-FIMMUrAgpl7bArp-8" value="" style="endArrow=classic;startArrow=classic;html=1;rounded=0;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="412.25" y="260" as="sourcePoint" />
+            <mxPoint x="412.25" y="230" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="S0sB-FIMMUrAgpl7bArp-9" value="" style="endArrow=classic;startArrow=classic;html=1;rounded=0;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="563.25" y="260" as="sourcePoint" />
+            <mxPoint x="563.25" y="230" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="S0sB-FIMMUrAgpl7bArp-10" value="" style="endArrow=classic;startArrow=classic;html=1;rounded=0;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="710.25" y="260" as="sourcePoint" />
+            <mxPoint x="710.25" y="230" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="S0sB-FIMMUrAgpl7bArp-11" value="net-monitor" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="653.75" y="289" width="120" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="S0sB-FIMMUrAgpl7bArp-12" value="io-monitor" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="503.25" y="289" width="120" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="S0sB-FIMMUrAgpl7bArp-13" value="dram-monitor" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="349.25" y="289" width="120" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="S0sB-FIMMUrAgpl7bArp-14" value="cpu-monitor" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="199.25" y="289" width="120" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="S0sB-FIMMUrAgpl7bArp-15" value="" style="endArrow=classic;startArrow=classic;html=1;rounded=0;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="256.5" y="358.5" as="sourcePoint" />
+            <mxPoint x="256.5" y="328.5" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="S0sB-FIMMUrAgpl7bArp-16" value="" style="endArrow=classic;startArrow=classic;html=1;rounded=0;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="413" y="357.5" as="sourcePoint" />
+            <mxPoint x="413" y="327.5" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="S0sB-FIMMUrAgpl7bArp-17" value="" style="endArrow=classic;startArrow=classic;html=1;rounded=0;" parent="1" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="564" y="358.5" as="sourcePoint" />
+            <mxPoint x="564" y="328.5" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <object placeholders="1" c4Name="[rdk-observer-rs] RDK Observer ARCH" c4Type="ContainerScopeBoundary" c4Description="RDK Observer Architecture Diagram" label="&lt;font style=&quot;font-size: 16px&quot;&gt;&lt;b&gt;&lt;div style=&quot;text-align: left&quot;&gt;%c4Name%&lt;/div&gt;&lt;/b&gt;&lt;/font&gt;&lt;div style=&quot;text-align: left&quot;&gt;%c4Description%&lt;/div&gt;" id="ta9w-fVcFz4rUW8sONDz-2">
+          <mxCell style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;metaEdit=1;allowArrows=0;resizable=1;rotatable=0;connectable=0;recursiveResize=0;expand=0;pointerEvents=0;points=[[0.25,0,0],[0.5,0,0],[0.75,0,0],[1,0.25,0],[1,0.5,0],[1,0.75,0],[0.75,1,0],[0.5,1,0],[0.25,1,0],[0,0.75,0],[0,0.5,0],[0,0.25,0]];" parent="1" vertex="1">
+            <mxGeometry x="20" y="10" width="260" height="40" as="geometry" />
+          </mxCell>
+        </object>
+        <mxCell id="ta9w-fVcFz4rUW8sONDz-3" value="Architecture: rdk-observer-rs" style="fillColor=#4DA1F5;strokeColor=none;shadow=1;gradientColor=none;fontSize=14;align=left;spacingLeft=50;fontColor=#ffffff;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="10" y="760" width="1150" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="jLv2CzifBeMV18eMbmW--3" value="" style="shape=flexArrow;endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="v5tY_pHnxjviGyY9Ucs--14" target="v5tY_pHnxjviGyY9Ucs--18" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="1018.5" y="236" as="sourcePoint" />
+            <mxPoint x="1020" y="290" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="b_Oz4dNFTRMi7V-lBoGF-1" value="prost (crate)" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="899" y="337" width="222" height="20" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

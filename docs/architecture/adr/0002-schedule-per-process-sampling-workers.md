@@ -28,6 +28,8 @@ Treat the first snapshot as a baseline. If the process exits, its start time cha
 
 Independent workers keep scheduling state local to each process. Jitter spreads procfs reads over time, while the shared concurrency limit caps the work that can happen at once. Adaptive intervals reserve more samples for changing processes without allowing stable processes to go unobserved indefinitely.
 
+Accessing `/proc/<pid>/...` directly is efficient when the coordinator already knows which PIDs to monitor because each worker reads only the files needed for its process. This avoids repeatedly enumerating and parsing the entire `/proc` process tree for every sample, so targeted per-PID observations can run more frequently than process discovery and reconciliation scans. Full procfs scans are still required at startup and periodically for reconciliation, as described in ADR-0003.
+
 ## Consequences
 
 ### Positive
