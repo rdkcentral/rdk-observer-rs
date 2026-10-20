@@ -44,8 +44,8 @@
 //! failures, and manage startup and shutdown. Pending record handling and
 //! failure policies remain to be defined.
 
-use crate::process_discovery::NetlinkProcessDiscovery;
-use tokio::select;
+use crate::process_worker::ProcessWorker;
+use tokio::task::JoinSet;
 use tracing::info;
 
 /// Run the observer until shutdown.
@@ -53,19 +53,12 @@ use tracing::info;
 /// This is the library entry point called by the executable. Worker startup,
 /// channels, observer mode transitions, and shutdown will be implemented here.
 pub async fn run() {
-    let mut discovery = NetlinkProcessDiscovery::default();
+    let (tx, mut rx) = tokio::sync::mpsc::channel(16);
 
-    loop {
-        select! {
-            _ = discovery.connected.changed() => {
-                info!("discovery connected: {}", *discovery.connected.borrow_and_update());
-            }
-            _ = discovery.refresh.notified() => {
-                info!("discovery requested refresh");
-            }
-            event = discovery.events.recv() => {
-                info!("discovery event: {event:?}");
-            }
-        }
+    let mut join_set = JoinSet::new();
+    join_set.spawn(ProcessWorker::run(tx));
+
+    while let Some(event) = rx.recv().await {
+        info!("{:?}", event);
     }
 }
