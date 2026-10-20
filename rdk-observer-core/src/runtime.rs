@@ -44,18 +44,28 @@
 //! failures, and manage startup and shutdown. Pending record handling and
 //! failure policies remain to be defined.
 
+use crate::process_discovery::NetlinkProcessDiscovery;
+use tokio::select;
+use tracing::info;
+
 /// Run the observer until shutdown.
 ///
 /// This is the library entry point called by the executable. Worker startup,
 /// channels, observer mode transitions, and shutdown will be implemented here.
-///
-/// # Errors
-///
-/// Currently returns [`std::io::ErrorKind::Unsupported`] because the observer
-/// workers are not implemented. No monitoring or background tasks are started.
-pub fn run() -> std::io::Result<()> {
-    Err(std::io::Error::new(
-        std::io::ErrorKind::Unsupported,
-        "observer workers are not implemented yet; no monitoring was started",
-    ))
+pub async fn run() {
+    let mut discovery = NetlinkProcessDiscovery::default();
+
+    loop {
+        select! {
+            _ = discovery.connected.changed() => {
+                info!("discovery connected: {}", *discovery.connected.borrow_and_update());
+            }
+            _ = discovery.refresh.notified() => {
+                info!("discovery requested refresh");
+            }
+            event = discovery.events.recv() => {
+                info!("discovery event: {event:?}");
+            }
+        }
+    }
 }
