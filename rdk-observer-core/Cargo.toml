@@ -7,3 +7,5 @@ license.workspace = true
 publish = false
 
 [dependencies]
+anyhow = "1"
+procfs = "0.18.0"
