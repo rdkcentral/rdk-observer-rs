@@ -11,3 +11,60 @@
 //! Readings will preserve timestamps, identities, values, units, and unavailable
 //! measurements for preparation and encoding by `output_worker`. System and
 //! process readings will be correlated by timestamp and need not sum exactly.
+
+use anyhow::Context;
+use procfs::process::Process;
+use procfs::{Current, Meminfo};
+
+use crate::output_model::{MemoryRecord, SystemMemoryRecord};
+
+pub fn read_system_memory() -> anyhow::Result<SystemMemoryRecord> {
+    let meminfo = Meminfo::current().context("failed to read /proc/meminfo")?;
+
+    Ok(SystemMemoryRecord {
+        total_bytes: Some(meminfo.mem_total),
+        available_bytes: meminfo.mem_available,
+    })
+}
+
+pub fn read_process_memory(pid: i32) -> anyhow::Result<MemoryRecord> {
+    let process = Process::new(pid).with_context(|| format!("failed to open process {pid}"))?;
+
+    let status = process
+        .status()
+        .with_context(|| format!("failed to read /proc/{pid}/status"))?;
+
+    let smaps_rollup = match process.smaps_rollup() {
+        Ok(smaps_rollup) => smaps_rollup
+            .memory_map_rollup
+            .0
+            .into_iter()
+            .next()
+            .map(|memory_map| memory_map.extension.map),
+        Err(error) => {
+            tracing::warn!(
+                pid,
+                error = ?error,
+                "failed to read /proc/{pid}/smaps_rollup"
+            );
+            None
+        }
+    };
+
+    let smaps_value = |name: &str| {
+        smaps_rollup
+            .as_ref()
+            .and_then(|values| values.get(name))
+            .copied()
+    };
+
+    Ok(MemoryRecord {
+        virtual_bytes: status.vmsize.map(kibibytes_to_bytes),
+        resident_bytes: status.vmrss.map(kibibytes_to_bytes),
+        proportional_bytes: smaps_value("Pss"),
+    })
+}
+
+fn kibibytes_to_bytes(value: u64) -> u64 {
+    value.saturating_mul(1024)
+}
