@@ -97,7 +97,7 @@ pub struct SystemStorageRecord {
 }
 
 /// Identifies a block device by its major/minor device numbers and kernel name.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BlockDeviceIdentity {
     /// Major device number identifying the device driver or class.
     pub major: u32,

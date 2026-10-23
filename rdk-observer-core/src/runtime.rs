@@ -44,7 +44,7 @@
 //! failures, and manage startup and shutdown. Pending record handling and
 //! failure policies remain to be defined.
 
-use crate::process_worker::ProcessWorker;
+use crate::collector_worker::CollectorWorker;
 use tokio::task::JoinSet;
 use tracing::info;
 
@@ -56,7 +56,7 @@ pub async fn run() {
     let (tx, mut rx) = tokio::sync::mpsc::channel(64);
 
     let mut join_set = JoinSet::new();
-    join_set.spawn(ProcessWorker::run(tx));
+    join_set.spawn(CollectorWorker::run(tx));
 
     while let Some(event) = rx.recv().await {
         info!("{event:?}");
