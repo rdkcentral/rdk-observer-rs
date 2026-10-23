@@ -8,3 +8,5 @@ publish = false
 
 [dependencies]
 rdk-observer-core = { path = "../rdk-observer-core" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
