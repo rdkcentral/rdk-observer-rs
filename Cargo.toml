@@ -1,9 +1,19 @@
 [workspace]
+resolver = "3"
 members = ["rdk-observer", "rdk-observer-core"]
-resolver = "2"
 
 [workspace.package]
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 license = "Apache-2.0"
 
+[workspace.dependencies]
+tokio = { version = "1.54.1", default-features = false }
+neli = { version = "0.7.5", default-features = false }
+rustix = "1.1.5"
+procfs = "0.18.0"
+libc = "0.2.191"
+futures = "0.3.34"
+anyhow = "1"
+tracing = "0.1.44"
+tracing-subscriber = "0.3.23"

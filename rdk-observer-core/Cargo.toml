@@ -7,3 +7,11 @@ license.workspace = true
 publish = false
 
 [dependencies]
+tokio = { workspace = true, features = ["sync", "fs", "time"] }
+neli = { workspace = true, features = ["async"] }
+rustix = { workspace = true, features = ["time"] }
+procfs.workspace = true
+libc.workspace = true
+futures.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
