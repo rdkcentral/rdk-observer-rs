@@ -8,6 +8,7 @@ publish = false
 
 [dependencies]
 tokio = { workspace = true, features = ["sync", "fs", "time"] }
+tokio-util = { workspace = true, features = ["rt"] }
 neli = { workspace = true, features = ["async"] }
 rustix = { workspace = true, features = ["time"] }
 procfs.workspace = true
