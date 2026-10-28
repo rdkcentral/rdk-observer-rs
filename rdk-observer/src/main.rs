@@ -6,6 +6,7 @@
 
 use clap::error::ErrorKind;
 use clap::{CommandFactory, Parser};
+use rdk_observer_core::runtime::RuntimeConfig;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::layer::SubscriberExt;
@@ -33,9 +34,8 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() {
-    // TODO(#9): pass arguments to `runtime::run()` when implemented.
-    let _args = parse_arguments();
+async fn main() -> anyhow::Result<()> {
+    let args = parse_arguments();
 
     tracing_subscriber::registry()
         .with(EnvFilter::from_default_env())
@@ -47,7 +47,16 @@ async fn main() {
         )
         .init();
 
-    rdk_observer_core::runtime::run().await;
+    let config = RuntimeConfig {
+        include_pids: args.pid.into_iter().collect(),
+        include_commands: args.command.into_iter().collect(),
+        include_rdk_processes: args.rdk_processes,
+        exclude_kernel_threads: args.no_kernel_threads,
+        exclude_userspace_processes: args.no_userspace_processes,
+        ..Default::default()
+    };
+
+    rdk_observer_core::runtime::run(config).await
 }
 
 /// Validate arguments combination that clap cannot express declaratively

@@ -44,3 +44,4 @@ pub mod process_discovery;
 pub mod process_registry;
 pub mod process_worker;
 pub mod runtime;
+pub mod runtime_components;

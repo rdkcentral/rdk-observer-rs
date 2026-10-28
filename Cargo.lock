@@ -668,6 +668,7 @@ dependencies = [
 name = "rdk-observer"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "clap",
  "rdk-observer-core",
  "tokio",

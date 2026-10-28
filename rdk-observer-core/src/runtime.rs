@@ -45,14 +45,72 @@
 //! failure policies remain to be defined.
 
 use crate::process_discovery::NetlinkProcessDiscovery;
+use crate::process_registry::ProcessRegistry;
+use crate::runtime_components::{DefaultRuntimeComponents, RuntimeComponents};
+use anyhow::Context;
+use std::collections::HashSet;
+use std::fmt::Debug;
+use std::sync::Arc;
 use tokio::select;
-use tracing::info;
+use tokio::task::JoinSet;
+use tracing::{debug, info, instrument};
+
+/// Configuration of the [Runtime]
+///
+/// Process filtering is done in exclude->include order (include has higher priority)
+#[derive(Debug, Default)]
+pub struct RuntimeConfig {
+    /// Include the processes with this PID
+    pub include_pids: HashSet<u32>,
+    /// Include processes with this command name; repeat to add more
+    pub include_commands: HashSet<String>,
+    /// Include RDK processes from the configured selection list
+    pub include_rdk_processes: bool,
+    /// Exclude kernel threads
+    pub exclude_kernel_threads: bool,
+    /// Exclude userspace processes
+    pub exclude_userspace_processes: bool,
+    /// Components provider, see [RuntimeComponents]
+    pub components: Option<Box<dyn RuntimeComponents>>,
+}
+
+/// Runtime context that can be shared between workers
+///
+/// It allows any component to access shared global state, like config
+pub(super) struct RuntimeContext {
+    pub config: RuntimeConfig,
+    pub components: Box<dyn RuntimeComponents>,
+    pub process_registry: ProcessRegistry,
+}
 
 /// Run the observer until shutdown.
 ///
 /// This is the library entry point called by the executable. Worker startup,
 /// channels, observer mode transitions, and shutdown will be implemented here.
-pub async fn run() {
+#[instrument(skip_all, "runtime")]
+pub async fn run(mut config: RuntimeConfig) -> anyhow::Result<()> {
+    debug!(?config, "initializing runtime");
+    let components = config.components.take();
+    let context = Arc::new(RuntimeContext {
+        config,
+        components: components.unwrap_or_else(|| Box::new(DefaultRuntimeComponents)),
+        process_registry: Default::default(),
+    });
+
+    debug!("staring workers");
+    let mut join_set = JoinSet::new();
+    join_set.spawn(stub_worker(context));
+
+    info!("runtime started");
+    join_set
+        .join_next()
+        .await
+        .context("runtime has no workers")?
+        .context("runtime worker has failed")?
+}
+
+/// todo: replace with actual workers when process/collector workers are ready
+async fn stub_worker(_context: Arc<RuntimeContext>) -> anyhow::Result<()> {
     let mut discovery = NetlinkProcessDiscovery::default();
 
     loop {

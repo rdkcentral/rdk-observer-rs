@@ -8,3 +8,8 @@
 //! deduplicate discovery results and events, and track collection task handles.
 //! `collector_worker` will use registered identities to collect one process or
 //! sample the selected list. Observation records will belong to `output_*`.
+
+#[derive(Default)]
+pub struct ProcessRegistry {
+    // todo: this is a stub implementation
+}
