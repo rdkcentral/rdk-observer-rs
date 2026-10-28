@@ -180,7 +180,7 @@ impl ProcessRegistry {
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Writer part of the registry that allows to add/remove processes
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 #[repr(transparent)]
 pub struct ProcessRegistryWriter(ProcessRegistry);
 
@@ -220,12 +220,14 @@ impl ProcessRegistryWriter {
 
     ////////////////////////////////////////////////////////////////////////////////
     /// Updates metadata of a registered process, unknown identities are ignored
-    pub fn update_process(&self, process: &ProcessInfo) {
+    ///
+    /// Returns false if process was not found
+    pub fn update_process(&self, process: &ProcessInfo) -> bool {
         let key = ProcessKey::from(process);
         let state = &mut *self.state.write();
 
         let Some(e) = state.processes.get_mut(&key) else {
-            return;
+            return false;
         };
 
         let mut changed = false;
@@ -241,6 +243,7 @@ impl ProcessRegistryWriter {
         if changed {
             state.notify(ProcessRegistryEvent::Updated(key));
         }
+        true
     }
 
     ////////////////////////////////////////////////////////////////////////////////
