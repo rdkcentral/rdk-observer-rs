@@ -4,8 +4,8 @@
 //! memory, CPU, storage I/O, or a collection of thread records. Thread entries
 //! include their identities, metadata, and optional CPU and I/O measurements.
 //! Process identities include optional logical and security labels. System
-//! observations carry their own timestamps with aggregate CPU, memory, or
-//! per-device storage I/O measurements. Unavailable measurements use `None`
+//! observations carry their own timestamps with aggregate CPU, memory, pressure,
+//! or per-device storage I/O measurements. Unavailable measurements use `None`
 //! rather than zero, and independently sampled records are not an atomic snapshot.
 //!
 //! These types describe the data passed to `output_encoding`, which will map
@@ -26,7 +26,7 @@ pub struct SystemRecord {
     pub resource: SystemResourceRecord,
 }
 
-/// System resource measurements for aggregate CPU, memory, or block-device I/O.
+/// System resource measurements for aggregate CPU, memory, pressure, or block-device I/O.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SystemResourceRecord {
     /// CPU time counters aggregated across all CPUs.
@@ -35,6 +35,8 @@ pub enum SystemResourceRecord {
     Memory(SystemMemoryRecord),
     /// Storage I/O measurements for selected block devices; avoid counting disks and partitions twice.
     Storage(Vec<SystemStorageRecord>),
+    /// System-wide CPU, memory, and I/O pressure stall information.
+    Pressure(SystemPressureRecord),
 }
 
 /// Aggregate CPU counters from `/proc/stat` with optional derived utilization.
@@ -118,6 +120,39 @@ pub struct SystemStorageCounters {
     pub read_sectors: Option<u64>,
     /// Number of 512-byte sectors successfully written, when available.
     pub write_sectors: Option<u64>,
+}
+
+/// System-wide pressure stall information from `/proc/pressure`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SystemPressureRecord {
+    /// CPU pressure, when `/proc/pressure/cpu` is available.
+    pub cpu: Option<PressureResourceRecord>,
+    /// Memory pressure, when `/proc/pressure/memory` is available.
+    pub memory: Option<PressureResourceRecord>,
+    /// I/O pressure, when `/proc/pressure/io` is available.
+    pub io: Option<PressureResourceRecord>,
+}
+
+/// Pressure stall information for one resource.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PressureResourceRecord {
+    /// Pressure when at least some tasks were stalled.
+    pub some: PressureStallRecord,
+    /// Pressure when all non-idle tasks were stalled.
+    pub full: PressureStallRecord,
+}
+
+/// Pressure stall values for one `some` or `full` record.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PressureStallRecord {
+    /// Percentage of stalled time over the last 10 seconds.
+    pub avg10_percent: f32,
+    /// Percentage of stalled time over the last 60 seconds.
+    pub avg60_percent: f32,
+    /// Percentage of stalled time over the last 300 seconds.
+    pub avg300_percent: f32,
+    /// Cumulative stalled time in microseconds.
+    pub total_microseconds: u64,
 }
 
 // -----------------------------------------------------------------------------
