@@ -45,8 +45,11 @@
 //! failure policies remain to be defined.
 
 use crate::collector_worker::CollectorWorker;
+use crate::process_registry::ProcessRegistry;
+use crate::process_worker::ProcessWorker;
+use tokio::select;
 use tokio::task::JoinSet;
-use tracing::info;
+use tracing::{error, info, warn};
 
 /// Run the observer until shutdown.
 ///
@@ -54,11 +57,31 @@ use tracing::info;
 /// channels, observer mode transitions, and shutdown will be implemented here.
 pub async fn run() {
     let (tx, mut rx) = tokio::sync::mpsc::channel(64);
+    let (registry, registry_writer) = ProcessRegistry::new();
 
-    let mut join_set = JoinSet::new();
-    join_set.spawn(CollectorWorker::run(tx));
+    let mut process_workers = JoinSet::new();
+    process_workers.spawn(ProcessWorker::run(registry_writer.clone()));
 
-    while let Some(event) = rx.recv().await {
-        info!("{event:?}");
+    let mut collector_workers = JoinSet::new();
+    collector_workers.spawn(CollectorWorker::run(tx, registry.clone()));
+
+    loop {
+        select! {
+            event = rx.recv() => {
+                let Some(event) = event else {
+                    return info!("collector events channel closed, stopping");
+                };
+                info!("{event:?}");
+            }
+            Some(result) = process_workers.join_next() => {
+                if let Err(e) = result {
+                    error!("process worker failed: {e}");
+                }
+                // previous worker state is not valid anymore, subscribers observe removal
+                registry_writer.clear_all_processes();
+                process_workers.spawn(ProcessWorker::run(registry_writer.clone()));
+                warn!("process worker restarted");
+            }
+        }
     }
 }
