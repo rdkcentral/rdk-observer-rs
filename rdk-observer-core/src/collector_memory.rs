@@ -12,11 +12,10 @@
 //! measurements for preparation and encoding by `output_worker`. System and
 //! process readings will be correlated by timestamp and need not sum exactly.
 
+use crate::output_model::{MemoryRecord, SystemMemoryRecord};
 use anyhow::Context;
 use procfs::process::Process;
 use procfs::{Current, Meminfo};
-
-use crate::output_model::{MemoryRecord, SystemMemoryRecord};
 
 /// Reads total and available system memory from `/proc/meminfo`.
 ///
@@ -42,22 +41,10 @@ pub fn read_process_memory(pid: i32) -> anyhow::Result<MemoryRecord> {
         .status()
         .with_context(|| format!("failed to read /proc/{pid}/status"))?;
 
-    let smaps_rollup = match process.smaps_rollup() {
-        Ok(smaps_rollup) => smaps_rollup
-            .memory_map_rollup
-            .0
-            .into_iter()
-            .next()
-            .map(|memory_map| memory_map.extension.map),
-        Err(error) => {
-            tracing::warn!(
-                pid,
-                error = ?error,
-                "failed to read /proc/{pid}/smaps_rollup"
-            );
-            None
-        }
-    };
+    let smaps_rollup = process.smaps_rollup().ok().and_then(|e| {
+        let mut iter = e.memory_map_rollup.0.into_iter();
+        iter.next().map(|memory_map| memory_map.extension.map)
+    });
 
     let smaps_value = |name: &str| {
         smaps_rollup
