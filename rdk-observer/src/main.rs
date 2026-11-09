@@ -4,10 +4,14 @@
 //! configuration loading, and logging initialization will be added here before
 //! handing control to the runtime once those interfaces are defined.
 
+#[cfg(feature = "tui")]
+mod tui;
+
 use clap::error::ErrorKind;
 use clap::{CommandFactory, Parser};
+use rdk_observer_core::process_registry::ProcessRegistry;
+use tokio::task::JoinSet;
 use tracing_subscriber::EnvFilter;
-use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -33,21 +37,46 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     // TODO(#9): pass arguments to `runtime::run()` when implemented.
     let _args = parse_arguments();
 
-    tracing_subscriber::registry()
-        .with(EnvFilter::from_default_env())
-        .with(
+    init_logger();
+
+    let (process_registry, registry_writer) = ProcessRegistry::new();
+    let mut join_set = JoinSet::<anyhow::Result<()>>::new();
+
+    #[cfg(feature = "tui")]
+    join_set.spawn(tui::run(process_registry.clone()));
+
+    join_set.spawn(async move {
+        rdk_observer_core::runtime::run(process_registry, registry_writer).await;
+        Ok(())
+    });
+
+    if let Some(result) = join_set.join_next().await {
+        result??;
+    }
+
+    Ok(())
+}
+
+fn init_logger() {
+    let registry = tracing_subscriber::registry().with(EnvFilter::from_default_env());
+
+    #[cfg(not(feature = "tui"))]
+    let registry = {
+        use tracing_subscriber::fmt::format::FmtSpan;
+
+        registry.with(
             tracing_subscriber::fmt::layer()
                 .with_target(true)
                 .with_level(true)
                 .with_span_events(FmtSpan::CLOSE),
         )
-        .init();
+    };
 
-    rdk_observer_core::runtime::run().await;
+    registry.init();
 }
 
 /// Validate arguments combination that clap cannot express declaratively
