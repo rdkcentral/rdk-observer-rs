@@ -22,3 +22,10 @@ hashlink = "0.12.2"
 parking_lot = "0.13.0"
 tracing = "0.1.44"
 tracing-subscriber = "0.3.23"
+
+[profile.release]
+strip = true
+debug = false
+opt-level = "z"
+lto = true
+codegen-units = 1
