@@ -15,4 +15,6 @@ libc.workspace = true
 rand.workspace = true
 futures.workspace = true
 anyhow.workspace = true
+hashlink.workspace = true
+parking_lot.workspace = true
 tracing.workspace = true

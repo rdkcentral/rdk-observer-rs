@@ -39,12 +39,16 @@ use crate::output_model::{
     ResourceRecord, StorageCounters, SystemCpuCounters, SystemRecord, SystemResourceRecord,
     SystemStorageCounters,
 };
-use crate::process_worker::{ProcessEvent, ProcessId, ProcessInfo, ProcessWorker};
+use crate::process_registry::{
+    ProcessKey, ProcessRegistry, ProcessRegistryEvent, RegisteredProcess,
+};
+use crate::process_worker::ProcessId;
 use rustix::time::{ClockId, clock_gettime};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use tokio::select;
 use tokio::sync::Semaphore;
+use tokio::sync::broadcast::error::RecvError;
 use tokio::task::{AbortHandle, JoinSet, spawn_blocking};
 use tokio::time::{Instant, MissedTickBehavior};
 use tracing::{error, info, instrument, trace, warn};
@@ -71,10 +75,10 @@ pub enum CollectorEvent {
 pub struct CollectorWorker {
     /// events produced to outside consumer
     output_events_tx: tokio::sync::mpsc::Sender<CollectorEvent>,
-    /// events produced from process worker to collector coordinator
-    process_events_rx: tokio::sync::mpsc::Receiver<ProcessEvent>,
+    /// global process registry
+    process_registry: ProcessRegistry,
     /// per_pid workers
-    per_pid_workers: HashMap<ProcessId, AbortHandle>,
+    per_pid_workers: HashMap<ProcessKey, AbortHandle>,
     /// collector tasks join set
     join_set: JoinSet<()>,
 }
@@ -82,24 +86,36 @@ pub struct CollectorWorker {
 impl CollectorWorker {
     ////////////////////////////////////////////////////////////////////////////////
     #[instrument(skip_all, "collector")]
-    pub async fn run(events_tx: tokio::sync::mpsc::Sender<CollectorEvent>) {
-        let (process_events_tx, process_events_rx) = tokio::sync::mpsc::channel(16);
+    pub async fn run(
+        events_tx: tokio::sync::mpsc::Sender<CollectorEvent>,
+        registry: ProcessRegistry,
+    ) {
+        let (snapshot, mut registry_events_rx) = registry.subscribe_with_snapshot();
 
         let mut this = Self {
             output_events_tx: events_tx.clone(),
-            process_events_rx,
+            process_registry: registry.clone(),
             per_pid_workers: Default::default(),
             join_set: Default::default(),
         };
 
-        this.join_set.spawn(ProcessWorker::run(process_events_tx));
         this.join_set.spawn(SystemWorker::run(events_tx.clone()));
+        this.sync_processes(snapshot);
 
         loop {
             select! {
-                event = this.process_events_rx.recv() => {
-                    this.handle_process_event(event).await;
-                }
+                event = registry_events_rx.recv() => match event {
+                    Ok(e) => this.handle_registry_event(e),
+                    Err(RecvError::Lagged(count)) => {
+                        warn!("missed {count} registry events, resyncing");
+                        let (snapshot, rx) = registry.subscribe_with_snapshot();
+                        registry_events_rx = rx;
+                        this.sync_processes(snapshot);
+                    }
+                    Err(RecvError::Closed) => {
+                        return info!("registry closed, stopping the worker");
+                    }
+                },
                 _ = events_tx.closed() => {
                     return info!("events tx channel closed, stopping the worker");
                 },
@@ -113,50 +129,50 @@ impl CollectorWorker {
     }
 
     ////////////////////////////////////////////////////////////////////////////////
-    async fn handle_process_event(&mut self, event: Option<ProcessEvent>) {
-        let Some(event) = event else {
-            for (_, task) in self.per_pid_workers.drain() {
-                task.abort();
-            }
-            let (tx, rx) = tokio::sync::mpsc::channel(self.process_events_rx.max_capacity());
-            self.process_events_rx = rx;
-            self.join_set.spawn(ProcessWorker::run(tx));
-            return warn!("process worker restarted");
-        };
+    fn sync_processes(&mut self, snapshot: Vec<RegisteredProcess>) {
+        let registered: HashSet<_> = snapshot.into_iter().map(|e| e.key()).collect();
 
-        match event {
-            ProcessEvent::ProcessStarted(e) => self.handle_process_event_started(e).await,
-            ProcessEvent::ProcessFinished(e) => self.handle_process_event_finished(e).await,
-            ProcessEvent::ProcessUnverified(_) => {
-                // todo implement when unverified events will be available
-            }
-            ProcessEvent::ThreadStarted(_) => {
-                // todo implement when thread collector will be ready
-            }
-            ProcessEvent::ThreadFinished(_) => {
-                // todo implement when thread collector will be ready
+        for (_, task) in self
+            .per_pid_workers
+            .extract_if(|e, _| !registered.contains(e))
+        {
+            task.abort();
+        }
+
+        for process in registered {
+            if !self.per_pid_workers.contains_key(&process) {
+                self.handle_process_started(process);
             }
         }
     }
 
     ////////////////////////////////////////////////////////////////////////////////
-    async fn handle_process_event_started(&mut self, process: ProcessInfo) {
+    fn handle_registry_event(&mut self, event: ProcessRegistryEvent) {
+        match event {
+            ProcessRegistryEvent::Started(e) => self.handle_process_started(e),
+            ProcessRegistryEvent::Finished(e) => self.handle_process_finished(e),
+            ProcessRegistryEvent::Updated(_) => {}
+        }
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    fn handle_process_started(&mut self, process: ProcessKey) {
         trace!("started: {process:?}");
 
-        let process_pid = process.pid;
-        let future = PerPidWorker::run(process, self.output_events_tx.clone());
+        let registry = self.process_registry.clone();
+        let future = PerPidWorker::run(registry, process, self.output_events_tx.clone());
         let handle = self.join_set.spawn(future);
 
-        if let Some(task) = self.per_pid_workers.insert(process_pid, handle) {
+        if let Some(task) = self.per_pid_workers.insert(process, handle) {
             task.abort();
         }
     }
 
     ////////////////////////////////////////////////////////////////////////////////
-    async fn handle_process_event_finished(&mut self, process: ProcessInfo) {
+    fn handle_process_finished(&mut self, process: ProcessKey) {
         trace!("finished: {process:?}");
 
-        if let Some(task) = self.per_pid_workers.remove(&process.pid) {
+        if let Some(task) = self.per_pid_workers.remove(&process) {
             task.abort();
         }
     }
@@ -344,7 +360,8 @@ impl SystemWorker {
 ////////////////////////////////////////////////////////////////////////////////
 struct PerPidWorker {
     pending_events: Vec<CollectorEvent>,
-    process: ProcessInfo,
+    process_registry: ProcessRegistry,
+    process: ProcessKey,
     last_cpu_record: Option<(Duration, CpuCounters)>,
     last_storage_record: Option<(Duration, StorageCounters)>,
 }
@@ -352,7 +369,11 @@ struct PerPidWorker {
 impl PerPidWorker {
     ////////////////////////////////////////////////////////////////////////////////
     #[instrument(skip_all, "collector/process", fields(pid = %process.pid))]
-    async fn run(process: ProcessInfo, events_tx: tokio::sync::mpsc::Sender<CollectorEvent>) {
+    async fn run(
+        process_registry: ProcessRegistry,
+        process: ProcessKey,
+        events_tx: tokio::sync::mpsc::Sender<CollectorEvent>,
+    ) {
         trace!("started");
 
         let mut frame_index = 0u32;
@@ -361,6 +382,7 @@ impl PerPidWorker {
 
         let mut this = Self {
             pending_events: vec![],
+            process_registry,
             process,
             last_cpu_record: None,
             last_storage_record: None,
@@ -384,6 +406,8 @@ impl PerPidWorker {
                 }
             }
 
+            this.update_registry_from_events();
+
             for event in this.pending_events.drain(..) {
                 if events_tx.send(event).await.is_err() {
                     return warn!("events_tx is closed, stopping");
@@ -402,6 +426,43 @@ impl PerPidWorker {
                 interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
             }
         }
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    /// Stores the latest records of this frame in the registry with a single lock
+    fn update_registry_from_events(&self) {
+        let (mut io, mut cpu, mut memory) = (None, None, None);
+        for event in &self.pending_events {
+            let CollectorEvent::Process((_, record)) = event else {
+                continue;
+            };
+            match &record.resource {
+                ResourceRecord::Storage(e) => io = Some(e.clone()),
+                ResourceRecord::Cpu(e) => cpu = Some(e.clone()),
+                ResourceRecord::Memory(e) => memory = Some(e.clone()),
+                ResourceRecord::Threads(_) => {
+                    // registry doesn't keep thread records yet
+                }
+            }
+        }
+
+        if io.is_none() && cpu.is_none() && memory.is_none() {
+            return;
+        }
+
+        // 1. all records are cloned outside the lock to reduce locked time
+        // 2. records that failed this frame keep their previous value
+        self.process_registry.update_process(&self.process, |e| {
+            if let Some(io) = io {
+                e.last_io_record = Some(io);
+            }
+            if let Some(cpu) = cpu {
+                e.last_cpu_record = Some(cpu);
+            }
+            if let Some(memory) = memory {
+                e.last_memory_record = Some(memory);
+            }
+        });
     }
 
     ////////////////////////////////////////////////////////////////////////////////
