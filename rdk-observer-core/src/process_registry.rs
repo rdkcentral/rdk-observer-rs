@@ -294,3 +294,201 @@ impl ProcessRegistryState {
         self.finished_processes.insert(finished.key, finished);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::broadcast::Receiver;
+    use tokio::sync::broadcast::error::TryRecvError;
+
+    fn process(key: ProcessKey, command: &str) -> ProcessInfo {
+        ProcessInfo {
+            pid: key.pid,
+            command: command.to_string(),
+            kernel_thread: false,
+            start_time: key.start_time,
+            exit_result: None,
+        }
+    }
+
+    fn key(pid: i32, start_time: u64) -> ProcessKey {
+        ProcessKey {
+            pid: ProcessId(pid),
+            start_time,
+        }
+    }
+
+    fn drain(rx: &mut Receiver<ProcessRegistryEvent>) -> Vec<ProcessRegistryEvent> {
+        let mut events = Vec::new();
+        loop {
+            match rx.try_recv() {
+                Ok(event) => events.push(event),
+                Err(TryRecvError::Empty) => return events,
+                Err(e) => panic!("unexpected receive error: {e:?}"),
+            }
+        }
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    #[test]
+    fn pid_reuse_does_not_inherit_collected_state() {
+        let (registry, writer) = ProcessRegistry::new();
+        let (_, mut rx) = registry.subscribe_with_snapshot();
+
+        let old_key = key(100, 1);
+        let old = process(old_key, "old");
+
+        let new_key = key(100, 2);
+        let new = process(new_key, "new");
+
+        // old process collects data and exits, then its PID is reused
+        assert!(writer.register_process(&old));
+        registry.update_process(&old_key, |e| {
+            e.last_memory_record = Some(MemoryRecord::default());
+        });
+        writer.unregister_process(&ProcessInfo {
+            exit_result: Some(Ok(0)),
+            ..old.clone()
+        });
+        assert!(writer.register_process(&new));
+
+        // new process starts with clean state, old one is no longer alive
+        let registered = registry.get_process(&new_key).unwrap();
+        assert_eq!(registered.command(), new.command);
+        assert!(registered.last_memory_record.is_none());
+        assert!(registered.exit_result.is_none());
+        assert!(registry.get_process(&old_key).is_none());
+
+        // old process keeps its collection state and exit result in history
+        let finished = registry.get_finished_process(&old_key).unwrap();
+        assert_eq!(finished.command(), old.command);
+        assert!(finished.last_memory_record.is_some());
+        assert_eq!(finished.exit_result, Some(Ok(0)));
+
+        // subscriber sees the old process exit before the new one starts
+        let events = drain(&mut rx);
+        assert_eq!(events.len(), 3);
+        assert!(matches!(events[0], ProcessRegistryEvent::Started(e) if e == old_key));
+        assert!(matches!(events[1], ProcessRegistryEvent::Finished(e) if e == old_key));
+        assert!(matches!(events[2], ProcessRegistryEvent::Started(e) if e == new_key));
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    #[test]
+    fn pid_reuse_with_missed_exit_keeps_identities_separate() {
+        let (registry, writer) = ProcessRegistry::new();
+        let (_, mut rx) = registry.subscribe_with_snapshot();
+
+        let old_key = key(100, 1);
+        let old = process(old_key, "old");
+
+        let new_key = key(100, 2);
+        let new = process(new_key, "new");
+
+        // exit of the old process was missed, the new one reuses its PID
+        assert!(writer.register_process(&old));
+        assert!(writer.register_process(&new));
+        assert_eq!(registry.get_snapshot().len(), 2);
+
+        // updates and removals must match the full identity
+        writer.update_process(&process(new_key, "renamed"));
+        assert_eq!(registry.get_process(&old_key).unwrap().command(), "old");
+        assert_eq!(registry.get_process(&new_key).unwrap().command(), "renamed");
+
+        // old identity is removed only once, the new process stays alive
+        assert!(writer.unregister_process(&old).is_some());
+        assert!(writer.unregister_process(&old).is_none());
+        assert!(registry.get_process(&old_key).is_none());
+        assert!(registry.get_process(&new_key).is_some());
+
+        // subscriber receives every change in order
+        let events = drain(&mut rx);
+        assert_eq!(events.len(), 4);
+        assert!(matches!(events[0], ProcessRegistryEvent::Started(e) if e == old_key));
+        assert!(matches!(events[1], ProcessRegistryEvent::Started(e) if e == new_key));
+        assert!(matches!(events[2], ProcessRegistryEvent::Updated(e) if e == new_key));
+        assert!(matches!(events[3], ProcessRegistryEvent::Finished(e) if e == old_key));
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    #[test]
+    fn finished_history_evicts_oldest_entries() {
+        let (registry, writer) = ProcessRegistry::new();
+        let total = FINISHED_PROCESSES_CAPACITY + 3;
+
+        // every process starts and finishes, moving into history
+        for pid in 0..total as i32 {
+            let process = process(key(pid, 1), "p");
+            assert!(writer.register_process(&process));
+            assert!(writer.unregister_process(&process).is_some());
+        }
+
+        // history never grows beyond its capacity
+        let history = registry.get_finished_snapshot();
+        assert_eq!(history.len(), FINISHED_PROCESSES_CAPACITY);
+
+        // oldest entries were dropped, order is preserved, oldest first
+        assert_eq!(history.first().unwrap().key(), key(3, 1));
+        assert_eq!(history.last().unwrap().key(), key(total as i32 - 1, 1));
+        for pid in 0..3 {
+            assert!(registry.get_finished_process(&key(pid, 1)).is_none());
+        }
+        assert!(registry.get_finished_process(&key(3, 1)).is_some());
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    #[test]
+    fn finished_history_eviction_includes_unverified_processes() {
+        let (registry, writer) = ProcessRegistry::new();
+
+        // one more unverified process than history can hold
+        for pid in 0..(FINISHED_PROCESSES_CAPACITY + 1) as i32 {
+            writer.register_unverified_process(process(key(pid, 1), "unverified"));
+        }
+
+        // history never grows beyond its capacity
+        assert_eq!(
+            registry.get_finished_snapshot().len(),
+            FINISHED_PROCESSES_CAPACITY,
+        );
+
+        // oldest unverified entry was dropped to make room for the newest
+        assert!(registry.get_finished_process(&key(0, 1)).is_none());
+        assert!(registry.get_finished_process(&key(1, 1)).is_some());
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    #[test]
+    fn lagged_subscriber_recovers_with_new_snapshot() {
+        let (registry, writer) = ProcessRegistry::new();
+
+        // subscriber starts with an empty registry
+        let (snapshot, mut rx) = registry.subscribe_with_snapshot();
+        assert!(snapshot.is_empty());
+
+        // overflow the events buffer while the subscriber is not reading
+        let missed = 10;
+        let total = EVENTS_CAPACITY + missed;
+        for pid in 0..total as i32 {
+            assert!(writer.register_process(&process(key(pid, 1), "p")));
+        }
+
+        // subscriber is notified that the oldest events were lost
+        assert!(matches!(rx.try_recv(), Err(TryRecvError::Lagged(n)) if n == missed as u64));
+
+        // subscriber resynchronizes by taking a new snapshot with a new receiver
+        let (snapshot, mut rx) = registry.subscribe_with_snapshot();
+        assert_eq!(snapshot.len(), total);
+        assert!(matches!(rx.try_recv(), Err(TryRecvError::Empty)));
+
+        // registry changes after the snapshot was taken
+        writer.unregister_process(&process(key(0, 1), "p"));
+        assert!(writer.register_process(&process(key(total as i32, 1), "p")));
+
+        // both changes are received in order
+        let events = drain(&mut rx);
+        assert_eq!(events.len(), 2);
+        assert!(matches!(events[0], ProcessRegistryEvent::Finished(k) if k == key(0, 1)));
+        assert!(matches!(events[1], ProcessRegistryEvent::Started(k) if k == key(total as i32, 1)));
+    }
+}
