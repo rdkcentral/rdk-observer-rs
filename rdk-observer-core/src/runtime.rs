@@ -45,7 +45,7 @@
 //! failure policies remain to be defined.
 
 use crate::collector_worker::CollectorWorker;
-use crate::process_registry::ProcessRegistry;
+use crate::process_registry::{ProcessRegistry, ProcessRegistryWriter};
 use crate::process_worker::ProcessWorker;
 use tokio::select;
 use tokio::task::JoinSet;
@@ -55,15 +55,14 @@ use tracing::{error, info, warn};
 ///
 /// This is the library entry point called by the executable. Worker startup,
 /// channels, observer mode transitions, and shutdown will be implemented here.
-pub async fn run() {
+pub async fn run(process_registry: ProcessRegistry, registry_writer: ProcessRegistryWriter) {
     let (tx, mut rx) = tokio::sync::mpsc::channel(64);
-    let (registry, registry_writer) = ProcessRegistry::new();
 
     let mut process_workers = JoinSet::new();
     process_workers.spawn(ProcessWorker::run(registry_writer.clone()));
 
     let mut collector_workers = JoinSet::new();
-    collector_workers.spawn(CollectorWorker::run(tx, registry.clone()));
+    collector_workers.spawn(CollectorWorker::run(tx, process_registry.clone()));
 
     loop {
         select! {
