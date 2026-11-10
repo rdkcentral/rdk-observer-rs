@@ -1,0 +1,181 @@
+syntax = "proto3";
+
+package rdk.observer.v1;
+
+// Shared wire contract for output_model. Keep field numbers and types stable;
+// reserve both the numbers and names of removed fields. Breaking changes use a
+// new package version. Optional measurements distinguish unavailable from zero.
+// Message boundaries and batching belong to the delivery protocol.
+
+// One process resource observation. process_identity and resource are required
+// by the application, even though proto3 permits their absence on the wire.
+message ObservationRecord {
+  ProcessIdentity process_identity = 1;
+  uint64 timestamp_unix_ns = 2; // Nanoseconds since the Unix epoch.
+  uint64 timestamp_monotonic_ns = 3; // Nanoseconds on the monotonic clock.
+  oneof resource {
+    MemoryRecord memory = 10;
+    CpuRecord cpu = 11;
+    StorageRecord storage = 12;
+    ThreadRecords threads = 13;
+  }
+}
+
+// One system resource observation. resource is required by the application.
+message SystemRecord {
+  uint64 timestamp_unix_ns = 1; // Nanoseconds since the Unix epoch.
+  uint64 timestamp_monotonic_ns = 2; // Nanoseconds on the monotonic clock.
+  oneof resource {
+    SystemCpuRecord cpu = 10;
+    SystemMemoryRecord memory = 11;
+    SystemStorageRecords storage = 12;
+    SystemPressureRecord pressure = 13;
+  }
+}
+
+message ProcessIdentity {
+  uint32 pid = 1;
+  uint64 start_time_ticks = 2; // Clock ticks since system boot.
+  optional string logical_label = 3;
+  SecurityLabel security_label = 4;
+}
+
+message SecurityLabel {
+  string module = 1;
+  string value = 2;
+}
+
+// counters is required by the application; utilization is optional.
+message CpuRecord {
+  uint64 clock_ticks_per_second = 1;
+  CpuCounters counters = 2;
+  CpuUtilization utilization = 3;
+}
+
+message CpuCounters {
+  optional uint64 user_ticks = 1;
+  optional uint64 system_ticks = 2;
+}
+
+message CpuUtilization {
+  uint64 interval_ns = 1;
+  double percent = 2; // 100 means one CPU, or all CPUs for system records.
+}
+
+message MemoryRecord {
+  optional uint64 virtual_bytes = 1;
+  optional uint64 resident_bytes = 2;
+  optional uint64 proportional_bytes = 3;
+}
+
+// counters is required by the application; rates is optional.
+message StorageRecord {
+  StorageCounters counters = 1;
+  IoRates rates = 2;
+}
+
+message StorageCounters {
+  optional uint64 read_bytes = 1;
+  optional uint64 write_bytes = 2;
+  optional uint64 read_syscalls = 3;
+  optional uint64 write_syscalls = 4;
+}
+
+message IoRates {
+  uint64 interval_ns = 1;
+  optional double read_bytes_per_second = 2;
+  optional double write_bytes_per_second = 3;
+}
+
+message ThreadIdentity {
+  uint32 tid = 1;
+  uint64 start_time_ticks = 2; // Clock ticks since system boot.
+}
+
+// identity is required by the application. Measurements and metadata are optional.
+message ThreadRecord {
+  ThreadIdentity identity = 1;
+  optional string name = 2;
+  optional string state = 3; // Exactly one Unicode scalar, matching Rust char.
+  optional sint64 priority = 4;
+  optional sint32 nice = 5;
+  optional uint32 last_cpu = 6;
+  optional uint64 voluntary_context_switches = 7;
+  optional uint64 nonvoluntary_context_switches = 8;
+  CpuRecord cpu = 9;
+  StorageRecord storage = 10;
+}
+
+// Wrappers preserve a selected resource even when its collection is empty.
+message ThreadRecords {
+  repeated ThreadRecord entries = 1;
+}
+
+message SystemStorageRecords {
+  repeated SystemStorageRecord entries = 1;
+}
+
+// counters is required by the application; utilization is optional.
+message SystemCpuRecord {
+  uint64 clock_ticks_per_second = 1;
+  SystemCpuCounters counters = 2;
+  CpuUtilization utilization = 3;
+}
+
+// Cumulative clock ticks. Guest time overlaps user/nice time.
+message SystemCpuCounters {
+  optional uint64 user_ticks = 1;
+  optional uint64 nice_ticks = 2;
+  optional uint64 system_ticks = 3;
+  optional uint64 idle_ticks = 4;
+  optional uint64 iowait_ticks = 5;
+  optional uint64 irq_ticks = 6;
+  optional uint64 softirq_ticks = 7;
+  optional uint64 steal_ticks = 8;
+  optional uint64 guest_ticks = 9;
+  optional uint64 guest_nice_ticks = 10;
+}
+
+message SystemMemoryRecord {
+  optional uint64 total_bytes = 1;
+  optional uint64 available_bytes = 2;
+}
+
+// device_identity and counters are required by the application.
+message SystemStorageRecord {
+  BlockDeviceIdentity device_identity = 1;
+  SystemStorageCounters counters = 2;
+  IoRates rates = 3;
+}
+
+message BlockDeviceIdentity {
+  uint32 major = 1;
+  uint32 minor = 2;
+  string name = 3;
+}
+
+message SystemStorageCounters {
+  optional uint64 read_operations = 1;
+  optional uint64 write_operations = 2;
+  optional uint64 read_sectors = 3; // Sectors are always 512 bytes.
+  optional uint64 write_sectors = 4;
+}
+
+message SystemPressureRecord {
+  PressureResourceRecord cpu = 1;
+  PressureResourceRecord memory = 2;
+  PressureResourceRecord io = 3;
+}
+
+// Both some and full are required by the application.
+message PressureResourceRecord {
+  PressureStallRecord some = 1;
+  PressureStallRecord full = 2;
+}
+
+message PressureStallRecord {
+  float avg10_percent = 1;
+  float avg60_percent = 2;
+  float avg300_percent = 3;
+  uint64 total_microseconds = 4;
+}
