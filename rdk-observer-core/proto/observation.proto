@@ -18,6 +18,7 @@ message ObservationRecord {
     CpuRecord cpu = 11;
     StorageRecord storage = 12;
     ThreadRecords threads = 13;
+    NetworkRecord network = 14;
   }
 }
 
@@ -30,6 +31,7 @@ message SystemRecord {
     SystemMemoryRecord memory = 11;
     SystemStorageRecords storage = 12;
     SystemPressureRecord pressure = 13;
+    SystemNetworkRecords network = 14;
   }
 }
 
@@ -87,6 +89,30 @@ message IoRates {
   optional double write_bytes_per_second = 3;
 }
 
+// Traffic reliably attributed to the identified process.
+// counters is required by the application; rates is optional.
+message NetworkRecord {
+  NetworkCounters counters = 1;
+  NetworkRates rates = 2;
+}
+
+// Cumulative measurements over the source's accounting lifetime, which may
+// begin after process start. Packet counts require a source that provides them.
+message NetworkCounters {
+  optional uint64 rx_bytes = 1;
+  optional uint64 tx_bytes = 2;
+  optional uint64 rx_packets = 3;
+  optional uint64 tx_packets = 4;
+}
+
+// Rates require two valid samples from the same accounting source and identity.
+// First samples, counter resets, and identity changes invalidate the baseline.
+message NetworkRates {
+  uint64 interval_ns = 1;
+  optional double rx_bytes_per_second = 2;
+  optional double tx_bytes_per_second = 3;
+}
+
 message ThreadIdentity {
   uint32 tid = 1;
   uint64 start_time_ticks = 2; // Clock ticks since system boot.
@@ -113,6 +139,10 @@ message ThreadRecords {
 
 message SystemStorageRecords {
   repeated SystemStorageRecord entries = 1;
+}
+
+message SystemNetworkRecords {
+  repeated SystemNetworkRecord entries = 1;
 }
 
 // counters is required by the application; utilization is optional.
@@ -159,6 +189,34 @@ message SystemStorageCounters {
   optional uint64 write_operations = 2;
   optional uint64 read_sectors = 3; // Sectors are always 512 bytes.
   optional uint64 write_sectors = 4;
+}
+
+// One network interface observation.
+// interface_identity and counters are required by the application.
+message SystemNetworkRecord {
+  NetworkInterfaceIdentity interface_identity = 1;
+  SystemNetworkCounters counters = 2;
+  NetworkRates rates = 3;
+}
+
+// Identity within the observed host and boot. Interface indexes are scoped to
+// a network namespace. Disappearance or recreation invalidates rate baselines.
+message NetworkInterfaceIdentity {
+  uint64 network_namespace_inode = 1;
+  uint32 interface_index = 2;
+  string name = 3; // For example, eth0 or wlan0.
+}
+
+// Cumulative interface statistics, distinct from process-attributed traffic.
+message SystemNetworkCounters {
+  optional uint64 rx_bytes = 1;
+  optional uint64 tx_bytes = 2;
+  optional uint64 rx_packets = 3;
+  optional uint64 tx_packets = 4;
+  optional uint64 rx_errors = 5;
+  optional uint64 tx_errors = 6;
+  optional uint64 rx_dropped = 7;
+  optional uint64 tx_dropped = 8;
 }
 
 message SystemPressureRecord {
