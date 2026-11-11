@@ -13,8 +13,13 @@ rustix = { workspace = true, features = ["time"] }
 procfs.workspace = true
 libc.workspace = true
 rand.workspace = true
+regex.workspace = true
 futures.workspace = true
 anyhow.workspace = true
 hashlink.workspace = true
 parking_lot.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros"] }
+scopeguard.workspace = true

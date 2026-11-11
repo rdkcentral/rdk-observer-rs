@@ -12,18 +12,16 @@ tui = [
     "dep:crossterm",
     "dep:futures",
     "dep:ratatui",
-    "dep:regex",
     "tokio/signal",
 ]
 
 [dependencies]
 rdk-observer-core = { path = "../rdk-observer-core" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
 clap = { workspace = true, features = ["derive"] }
 anyhow = { workspace = true }
 futures = { workspace = true, optional = true }
 ratatui = { workspace = true, optional = true }
-crossterm = { workspace = true, optional = true }
-regex = { workspace = true, optional = true }
+crossterm = { workspace = true, optional = true, features = ["event-stream"] }
