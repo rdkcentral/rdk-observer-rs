@@ -57,6 +57,7 @@ pub fn read_process_memory(pid: i32) -> anyhow::Result<MemoryRecord> {
         virtual_bytes: status.vmsize.map(kibibytes_to_bytes),
         resident_bytes: status.vmrss.map(kibibytes_to_bytes),
         proportional_bytes: smaps_value("Pss"),
+        forensic: None,
     })
 }
 

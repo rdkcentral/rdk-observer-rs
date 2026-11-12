@@ -17,7 +17,8 @@
 //! ADR-0001's scope.
 
 use crate::output_model::{
-    BlockDeviceIdentity, StorageCounters, StorageRecord, SystemStorageCounters, SystemStorageRecord,
+    StorageCounters, StorageRecord, SystemBlockDeviceIdentity, SystemStorageCounters,
+    SystemStorageRecord,
 };
 use anyhow::Context;
 use procfs::process::Process;
@@ -37,7 +38,7 @@ pub fn read_system_io() -> anyhow::Result<Vec<SystemStorageRecord>> {
         }
 
         records.push(SystemStorageRecord {
-            device_identity: BlockDeviceIdentity {
+            device_identity: SystemBlockDeviceIdentity {
                 major: disk_stat.major.cast_unsigned(),
                 minor: disk_stat.minor.cast_unsigned(),
                 name: disk_stat.name,

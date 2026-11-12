@@ -12,7 +12,9 @@
 
 use procfs::{CpuPressure, Current, IoPressure, MemoryPressure};
 
-use crate::output_model::{PressureResourceRecord, PressureStallRecord, SystemPressureRecord};
+use crate::output_model::{
+    SystemPressureRecord, SystemPressureResourceRecord, SystemPressureStallRecord,
+};
 
 /// Reads system CPU, memory, and I/O pressure from `/proc/pressure`.
 ///
@@ -48,15 +50,15 @@ pub fn read_system_pressure() -> anyhow::Result<SystemPressureRecord> {
 fn pressure_resource_record(
     some: procfs::PressureRecord,
     full: procfs::PressureRecord,
-) -> PressureResourceRecord {
-    PressureResourceRecord {
-        some: PressureStallRecord {
+) -> SystemPressureResourceRecord {
+    SystemPressureResourceRecord {
+        some: SystemPressureStallRecord {
             avg10_percent: some.avg10,
             avg60_percent: some.avg60,
             avg300_percent: some.avg300,
             total_microseconds: some.total,
         },
-        full: PressureStallRecord {
+        full: SystemPressureStallRecord {
             avg10_percent: full.avg10,
             avg60_percent: full.avg60,
             avg300_percent: full.avg300,

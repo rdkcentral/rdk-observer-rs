@@ -31,15 +31,16 @@
 //! failures will be reported to the coordinator or runtime; policies remain
 //! to be defined.
 
-use crate::collector_cpu::{read_process_cpu, read_system_cpu};
+use crate::collector_cpu::{read_process_cpu_with_state, read_system_cpu};
 use crate::collector_io::{read_process_io, read_system_io};
 use crate::collector_memory::{read_process_memory, read_system_memory};
 use crate::output_model::{
-    BlockDeviceIdentity, CpuCounters, CpuUtilization, IoRates, ObservationRecord, ProcessIdentity,
-    ResourceRecord, StorageCounters, SystemCpuCounters, SystemRecord, SystemResourceRecord,
-    SystemStorageCounters,
+    CpuCounters, CpuUtilization, IoRates, ProcessIdentity, ProcessRecord, ResourceRecord,
+    StorageCounters, SystemBlockDeviceIdentity, SystemCpuCounters, SystemCpuUtilization,
+    SystemRecord, SystemResourceRecord, SystemStorageCounters,
 };
 use crate::process_worker::{ProcessEvent, ProcessId, ProcessInfo, ProcessWorker};
+use anyhow::Context;
 use rustix::time::{ClockId, clock_gettime};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -64,7 +65,7 @@ static PROCESS_COLLECTION_CONCURRENCY: Semaphore = Semaphore::const_new(4);
 #[derive(Debug)]
 pub enum CollectorEvent {
     System(SystemRecord),
-    Process((ProcessId, ObservationRecord)),
+    Process((ProcessId, ProcessRecord)),
 }
 
 /// Worker that collect system/process stats with some interval
@@ -168,7 +169,7 @@ struct SystemWorker {
     last_cpu_record: Option<(Duration, SystemCpuCounters)>,
     last_io_records: Option<(
         Duration,
-        HashMap<BlockDeviceIdentity, SystemStorageCounters>,
+        HashMap<SystemBlockDeviceIdentity, SystemStorageCounters>,
     )>,
 }
 
@@ -302,7 +303,7 @@ impl SystemWorker {
             if let Some(busy) = busy
                 && busy + idle > 0
             {
-                record.utilization = Some(CpuUtilization {
+                record.utilization = Some(SystemCpuUtilization {
                     interval_ns: interval.as_nanos() as u64,
                     percent: busy as f64 / (busy + idle) as f64 * 100.0,
                 });
@@ -444,11 +445,12 @@ impl PerPidWorker {
         }
 
         self.last_storage_record = Some((ts_monotonic, record.counters.clone()));
-        self.schedule_record(ObservationRecord {
+        self.schedule_record(ProcessRecord {
             process_identity: self.process_identity(),
             timestamp_unix_ns: ts_unix_epoch.as_nanos() as u64,
             timestamp_monotonic_ns: ts_monotonic.as_nanos() as u64,
             resource: ResourceRecord::Storage(record),
+            process_state: None,
         });
         Ok(())
     }
@@ -459,7 +461,12 @@ impl PerPidWorker {
 
         let pid = self.process.pid.0;
         let start_time = self.process.start_time;
-        let mut record = spawn_blocking(move || read_process_cpu(pid, start_time)).await??;
+        let (mut record, process_state) =
+            spawn_blocking(move || read_process_cpu_with_state(pid, start_time)).await??;
+        let counters = record
+            .counters
+            .as_ref()
+            .context("CPU collector returned no normal counters")?;
         let ts_monotonic = get_monotonic_time();
         let ts_unix_epoch = get_unix_epoch_time();
 
@@ -469,7 +476,7 @@ impl PerPidWorker {
 
         if let Some((last_ts, last_counters)) = self.last_cpu_record.as_ref() {
             let interval = ts_monotonic.saturating_sub(*last_ts);
-            let busy = busy_ticks(&record.counters).checked_sub(busy_ticks(last_counters));
+            let busy = busy_ticks(counters).checked_sub(busy_ticks(last_counters));
 
             if let Some(busy) = busy
                 && record.clock_ticks_per_second > 0
@@ -483,12 +490,13 @@ impl PerPidWorker {
             }
         }
 
-        self.last_cpu_record = Some((ts_monotonic, record.counters.clone()));
-        self.schedule_record(ObservationRecord {
+        self.last_cpu_record = Some((ts_monotonic, counters.clone()));
+        self.schedule_record(ProcessRecord {
             process_identity: self.process_identity(),
             timestamp_unix_ns: ts_unix_epoch.as_nanos() as u64,
             timestamp_monotonic_ns: ts_monotonic.as_nanos() as u64,
             resource: ResourceRecord::Cpu(record),
+            process_state: Some(process_state),
         });
         Ok(())
     }
@@ -502,11 +510,12 @@ impl PerPidWorker {
         let ts_monotonic = get_monotonic_time();
         let ts_unix_epoch = get_unix_epoch_time();
 
-        self.schedule_record(ObservationRecord {
+        self.schedule_record(ProcessRecord {
             process_identity: self.process_identity(),
             timestamp_unix_ns: ts_unix_epoch.as_nanos() as u64,
             timestamp_monotonic_ns: ts_monotonic.as_nanos() as u64,
             resource: ResourceRecord::Memory(record),
+            process_state: None,
         });
         Ok(())
     }
@@ -522,7 +531,7 @@ impl PerPidWorker {
     }
 
     ////////////////////////////////////////////////////////////////////////////////
-    fn schedule_record(&mut self, record: ObservationRecord) {
+    fn schedule_record(&mut self, record: ProcessRecord) {
         self.pending_events
             .push(CollectorEvent::Process((self.process.pid, record)));
     }
@@ -538,4 +547,65 @@ fn get_unix_epoch_time() -> Duration {
 fn get_monotonic_time() -> Duration {
     let spec = clock_gettime(ClockId::Monotonic);
     Duration::new(spec.tv_sec as u64, spec.tv_nsec as u32)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::output_encoding::{decode_process_record, encode_process_record};
+
+    fn own_process_worker() -> PerPidWorker {
+        let process = procfs::process::Process::myself().unwrap();
+        let stat = process.stat().unwrap();
+        PerPidWorker {
+            pending_events: Vec::new(),
+            process: ProcessInfo {
+                pid: ProcessId(process.pid),
+                command: stat.comm,
+                start_time: stat.starttime,
+                exit_result: None,
+            },
+            last_cpu_record: None,
+            last_storage_record: None,
+        }
+    }
+
+    #[test]
+    fn process_cpu_observation_captures_state_and_round_trips() {
+        let mut worker = own_process_worker();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+
+        runtime.block_on(worker.collect_cpu()).unwrap();
+
+        assert_eq!(worker.pending_events.len(), 1);
+        let CollectorEvent::Process((pid, record)) = &worker.pending_events[0] else {
+            panic!("expected a process observation");
+        };
+        assert_eq!(*pid, worker.process.pid);
+        assert_eq!(
+            record.process_identity.start_time_ticks,
+            worker.process.start_time
+        );
+        assert!(record.process_state.is_some());
+        assert!(matches!(record.resource, ResourceRecord::Cpu(_)));
+        let decoded = decode_process_record(&encode_process_record(record)).unwrap();
+        assert_eq!(&decoded, record);
+    }
+
+    #[test]
+    fn mismatched_process_identity_does_not_emit_state_or_measurements() {
+        let mut worker = own_process_worker();
+        worker.process.start_time += 1;
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+
+        let error = runtime.block_on(worker.collect_cpu()).unwrap_err();
+
+        assert!(error.to_string().contains("starttime mismatch"));
+        assert!(worker.pending_events.is_empty());
+        assert!(worker.last_cpu_record.is_none());
+    }
 }

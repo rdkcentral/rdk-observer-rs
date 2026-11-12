@@ -52,6 +52,14 @@ pub fn read_system_cpu() -> anyhow::Result<SystemCpuRecord> {
 /// returned in clock ticks.
 /// Utilization is not calculated here.
 pub fn read_process_cpu(pid: i32, expected_starttime: u64) -> anyhow::Result<CpuRecord> {
+    read_process_cpu_with_state(pid, expected_starttime).map(|(record, _)| record)
+}
+
+/// Reads CPU counters and state from the same identity-validated stat sample.
+pub(crate) fn read_process_cpu_with_state(
+    pid: i32,
+    expected_starttime: u64,
+) -> anyhow::Result<(CpuRecord, char)> {
     let process = Process::new(pid).with_context(|| format!("failed to open process {pid}"))?;
 
     let stat = process
@@ -65,12 +73,16 @@ pub fn read_process_cpu(pid: i32, expected_starttime: u64) -> anyhow::Result<Cpu
         ));
     }
 
-    Ok(CpuRecord {
-        clock_ticks_per_second: ticks_per_second(),
-        counters: CpuCounters {
-            user_ticks: Some(stat.utime),
-            system_ticks: Some(stat.stime),
+    Ok((
+        CpuRecord {
+            clock_ticks_per_second: ticks_per_second(),
+            counters: Some(CpuCounters {
+                user_ticks: Some(stat.utime),
+                system_ticks: Some(stat.stime),
+            }),
+            utilization: None,
+            forensic: None,
         },
-        utilization: None,
-    })
+        stat.state,
+    ))
 }
