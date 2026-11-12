@@ -4,9 +4,10 @@
 //! configuration loading, and logging initialization will be added here before
 //! handing control to the runtime once those interfaces are defined.
 
+#[cfg(feature = "rbus")]
+mod rbus;
 #[cfg(feature = "tui")]
 mod tui;
-
 use clap::error::ErrorKind;
 use clap::{CommandFactory, Parser};
 use rdk_observer_core::process_filter::ProcessFilter;
@@ -73,10 +74,16 @@ async fn main() -> anyhow::Result<()> {
         ),
     });
 
+    #[cfg(feature = "rbus")]
+    let _rbus_handle = rbus::RBusConnection::open(runtime.registry()).inspect_err(|e| {
+        tracing::error!("failed to open RBus connection: {e}");
+    });
+
     let mut join_set = JoinSet::new();
 
     #[cfg(feature = "tui")]
     join_set.spawn(tui::run(runtime.registry()));
+
     join_set.spawn(runtime.run());
 
     if let Some(result) = join_set.join_next().await {
