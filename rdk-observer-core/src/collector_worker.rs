@@ -431,14 +431,16 @@ impl PerPidWorker {
     /// Stores the latest records of this frame in the registry with a single lock
     fn update_registry_from_events(&self) {
         let (mut io, mut cpu, mut memory) = (None, None, None);
+
         for event in &self.pending_events {
             let CollectorEvent::Process((_, record)) = event else {
                 continue;
             };
+            let ts = Duration::from_nanos(record.timestamp_unix_ns);
             match &record.resource {
-                ResourceRecord::Storage(e) => io = Some(e.clone()),
-                ResourceRecord::Cpu(e) => cpu = Some(e.clone()),
-                ResourceRecord::Memory(e) => memory = Some(e.clone()),
+                ResourceRecord::Storage(e) => io = Some((ts, e.clone())),
+                ResourceRecord::Cpu(e) => cpu = Some((ts, e.clone())),
+                ResourceRecord::Memory(e) => memory = Some((ts, e.clone())),
                 ResourceRecord::Threads(_) => {
                     // registry doesn't keep thread records yet
                 }

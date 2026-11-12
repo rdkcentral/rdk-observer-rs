@@ -8,6 +8,8 @@ edition = "2024"
 license = "Apache-2.0"
 
 [workspace.dependencies]
+rbus-core = { git = "https://github.com/rdkcentral/ieee1905-rs" }
+rbus-provider = { git = "https://github.com/rdkcentral/ieee1905-rs"}
 tokio = { version = "1.54.1", default-features = false }
 tokio-util = "0.7.20"
 neli = { version = "0.7.5", default-features = false }

@@ -41,7 +41,7 @@ async fn runtime_collects_registered_process() {
     let registered = registry.get_process(&process_key).unwrap();
     assert_eq!(registered.command(), process.command);
     assert_eq!(
-        registered.last_memory_record.unwrap().resident_bytes,
+        registered.last_memory_record.unwrap().1.resident_bytes,
         Some(default_process_resident_bytes(process_key.pid)),
     );
 

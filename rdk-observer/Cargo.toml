@@ -8,6 +8,7 @@ publish = false
 
 [features]
 default = []
+rbus = ["dep:rbus-core", "dep:rbus-provider", "tokio/signal"]
 tui = [
     "dep:crossterm",
     "dep:futures",
@@ -16,6 +17,8 @@ tui = [
 ]
 
 [dependencies]
+rbus-core = { workspace = true, optional = true }
+rbus-provider = { workspace = true, optional = true }
 rdk-observer-core = { path = "../rdk-observer-core" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 tracing = { workspace = true }
