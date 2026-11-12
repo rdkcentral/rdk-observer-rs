@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::ops::Deref;
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::warn;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -51,9 +52,9 @@ pub struct RegisteredProcess {
     command: String,
     kernel_thread: bool,
     pub exit_result: Option<Result<u32, u32>>,
-    pub last_io_record: Option<StorageRecord>,
-    pub last_cpu_record: Option<CpuRecord>,
-    pub last_memory_record: Option<MemoryRecord>,
+    pub last_io_record: Option<(Duration, StorageRecord)>,
+    pub last_cpu_record: Option<(Duration, CpuRecord)>,
+    pub last_memory_record: Option<(Duration, MemoryRecord)>,
 }
 
 impl RegisteredProcess {
@@ -347,7 +348,7 @@ mod tests {
         // old process collects data and exits, then its PID is reused
         assert!(writer.register_process(&old));
         registry.update_process(&old_key, |e| {
-            e.last_memory_record = Some(MemoryRecord::default());
+            e.last_memory_record = Some((Duration::default(), MemoryRecord::default()));
         });
         writer.unregister_process(&ProcessInfo {
             exit_result: Some(Ok(0)),
