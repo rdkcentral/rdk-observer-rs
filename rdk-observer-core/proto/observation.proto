@@ -7,24 +7,13 @@ package rdk.observer.v1;
 // new package version. Optional measurements distinguish unavailable from zero.
 // Message boundaries and batching belong to the delivery protocol.
 
-// -----------------------------------------------------------------------------
-// Observation envelopes and process identity
-// -----------------------------------------------------------------------------
+// =============================================================================
+// System records
+// =============================================================================
 
-// One process resource observation. process_identity and resource are required
-// by the application, even though proto3 permits their absence on the wire.
-message ObservationRecord {
-  ProcessIdentity process_identity = 1;
-  uint64 timestamp_unix_ns = 2; // Nanoseconds since the Unix epoch.
-  uint64 timestamp_monotonic_ns = 3; // Nanoseconds on the monotonic clock.
-  oneof resource {
-    MemoryRecord memory = 10;
-    CpuRecord cpu = 11;
-    StorageRecord storage = 12;
-    ThreadRecords threads = 13;
-    NetworkRecord network = 14;
-  }
-}
+// -----------------------------------------------------------------------------
+// System envelope
+// -----------------------------------------------------------------------------
 
 // One system resource observation. resource is required by the application.
 message SystemRecord {
@@ -39,39 +28,15 @@ message SystemRecord {
   }
 }
 
-message ProcessIdentity {
-  uint32 pid = 1;
-  uint64 start_time_ticks = 2; // Clock ticks since system boot.
-  optional string logical_label = 3;
-  SecurityLabel security_label = 4;
-}
-
-message SecurityLabel {
-  string module = 1;
-  string value = 2;
-}
-
 // -----------------------------------------------------------------------------
-// CPU records
+// System CPU
 // -----------------------------------------------------------------------------
-
-// counters is required by the application; utilization is optional.
-message CpuRecord {
-  uint64 clock_ticks_per_second = 1;
-  CpuCounters counters = 2;
-  CpuUtilization utilization = 3;
-}
-
-message CpuCounters {
-  optional uint64 user_ticks = 1;
-  optional uint64 system_ticks = 2;
-}
 
 // counters is required by the application; utilization is optional.
 message SystemCpuRecord {
   uint64 clock_ticks_per_second = 1;
   SystemCpuCounters counters = 2;
-  CpuUtilization utilization = 3;
+  SystemCpuUtilization utilization = 3;
 }
 
 // Cumulative clock ticks. Guest time overlaps user/nice time.
@@ -88,20 +53,14 @@ message SystemCpuCounters {
   optional uint64 guest_nice_ticks = 10;
 }
 
-message CpuUtilization {
+message SystemCpuUtilization {
   uint64 interval_ns = 1;
-  double percent = 2; // 100 means one CPU, or all CPUs for system records.
+  double percent = 2; // 100 means all CPU capacity is busy.
 }
 
 // -----------------------------------------------------------------------------
-// Memory records
+// System memory
 // -----------------------------------------------------------------------------
-
-message MemoryRecord {
-  optional uint64 virtual_bytes = 1;
-  optional uint64 resident_bytes = 2;
-  optional uint64 proportional_bytes = 3;
-}
 
 message SystemMemoryRecord {
   optional uint64 total_bytes = 1;
@@ -109,21 +68,8 @@ message SystemMemoryRecord {
 }
 
 // -----------------------------------------------------------------------------
-// Storage records
+// System storage
 // -----------------------------------------------------------------------------
-
-// counters is required by the application; rates is optional.
-message StorageRecord {
-  StorageCounters counters = 1;
-  IoRates rates = 2;
-}
-
-message StorageCounters {
-  optional uint64 read_bytes = 1;
-  optional uint64 write_bytes = 2;
-  optional uint64 read_syscalls = 3;
-  optional uint64 write_syscalls = 4;
-}
 
 // Preserves a selected storage resource even when its collection is empty.
 message SystemStorageRecords {
@@ -132,12 +78,12 @@ message SystemStorageRecords {
 
 // device_identity and counters are required by the application.
 message SystemStorageRecord {
-  BlockDeviceIdentity device_identity = 1;
+  SystemBlockDeviceIdentity device_identity = 1;
   SystemStorageCounters counters = 2;
   IoRates rates = 3;
 }
 
-message BlockDeviceIdentity {
+message SystemBlockDeviceIdentity {
   uint32 major = 1;
   uint32 minor = 2;
   string name = 3;
@@ -150,71 +96,9 @@ message SystemStorageCounters {
   optional uint64 write_sectors = 4;
 }
 
-message IoRates {
-  uint64 interval_ns = 1;
-  optional double read_bytes_per_second = 2;
-  optional double write_bytes_per_second = 3;
-}
-
 // -----------------------------------------------------------------------------
-// Network records: process traffic, TCP/UDP socket accounting, and interfaces
+// System network interfaces
 // -----------------------------------------------------------------------------
-
-// Traffic reliably attributed to the identified process.
-// counters is required by the application; rates, tcp, and udp are optional.
-message NetworkRecord {
-  NetworkCounters counters = 1;
-  NetworkRates rates = 2;
-  TcpCounters tcp = 3; // Optional TCP-only socket accounting from eBPF capture.
-  UdpCounters udp = 4; // Optional UDP-only socket accounting from eBPF capture.
-}
-
-// Cumulative measurements over the source's accounting lifetime, which may
-// begin after process start. Packet counts require a source that provides them.
-message NetworkCounters {
-  optional uint64 rx_bytes = 1;
-  optional uint64 tx_bytes = 2;
-  optional uint64 rx_packets = 3;
-  optional uint64 tx_packets = 4;
-}
-
-// Cumulative TCP socket accounting for the identified process over the capture
-// lifetime, which may begin after process start. RX/TX are relative to that
-// process. Count each completed send/receive operation with a positive return
-// value once; bytes use the actual return value, including partial transfers.
-// Exclude failed/zero-byte operations. Payload bytes exclude protocol headers
-// and are not counted again for TCP retransmissions.
-// "Messages" mean these successful socket operations, not packets, TCP segments,
-// or framed application messages: TCP itself does not preserve message boundaries.
-// Unavailable counters remain absent, and zero means a measured lack of traffic.
-message TcpCounters {
-  optional uint64 rx_bytes = 1;
-  optional uint64 tx_bytes = 2;
-  optional uint64 rx_messages = 3;
-  optional uint64 tx_messages = 4;
-}
-
-// Cumulative UDP socket accounting for the identified process over the capture
-// lifetime. RX/TX are relative to that process. Bytes count payload delivered to
-// the application on receive or accepted by the kernel on send, excluding headers
-// and discarded bytes from truncated receives. Messages count successfully
-// received/sent datagrams, including zero-length datagrams; batched operations
-// count each successful datagram separately. Exclude errors and MSG_PEEK receives.
-// Unavailable counters remain absent, and zero means a measured lack of traffic.
-message UdpCounters {
-  optional uint64 rx_bytes = 1;
-  optional uint64 tx_bytes = 2;
-  optional uint64 rx_messages = 3;
-  optional uint64 tx_messages = 4;
-}
-
-// Rates require two valid samples from the same accounting source and identity.
-// First samples, counter resets, and identity changes invalidate the baseline.
-message NetworkRates {
-  uint64 interval_ns = 1;
-  optional double rx_bytes_per_second = 2;
-  optional double tx_bytes_per_second = 3;
-}
 
 // Preserves a selected network resource even when its collection is empty.
 message SystemNetworkRecords {
@@ -224,14 +108,14 @@ message SystemNetworkRecords {
 // One network interface observation.
 // interface_identity and counters are required by the application.
 message SystemNetworkRecord {
-  NetworkInterfaceIdentity interface_identity = 1;
+  SystemNetworkInterfaceIdentity interface_identity = 1;
   SystemNetworkCounters counters = 2;
   NetworkRates rates = 3;
 }
 
 // Identity within the observed host and boot. Interface indexes are scoped to
 // a network namespace. Disappearance or recreation invalidates rate baselines.
-message NetworkInterfaceIdentity {
+message SystemNetworkInterfaceIdentity {
   uint64 network_namespace_inode = 1;
   uint32 interface_index = 2;
   string name = 3; // For example, eth0 or wlan0.
@@ -250,7 +134,277 @@ message SystemNetworkCounters {
 }
 
 // -----------------------------------------------------------------------------
+// System pressure
+// -----------------------------------------------------------------------------
+
+message SystemPressureRecord {
+  SystemPressureResourceRecord cpu = 1;
+  SystemPressureResourceRecord memory = 2;
+  SystemPressureResourceRecord io = 3;
+}
+
+// Both some and full are required by the application.
+message SystemPressureResourceRecord {
+  SystemPressureStallRecord some = 1;
+  SystemPressureStallRecord full = 2;
+}
+
+message SystemPressureStallRecord {
+  float avg10_percent = 1;
+  float avg60_percent = 2;
+  float avg300_percent = 3;
+  uint64 total_microseconds = 4;
+}
+
+// =============================================================================
+// Process records
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// Process envelope and identity
+// -----------------------------------------------------------------------------
+
+// One process resource observation. process_identity and resource are required
+// by the application, even though proto3 permits their absence on the wire.
+// Normal measurements and optional Forensic* records use this envelope.
+// Forensic process measurements cover the target thread group, including its main
+// thread and threads that start or exit during capture; child processes are excluded.
+// Capturing only selected threads produces ThreadRecords, not process-wide totals.
+message ProcessRecord {
+  ProcessIdentity process_identity = 1;
+  uint64 timestamp_unix_ns = 2; // Nanoseconds since the Unix epoch.
+  uint64 timestamp_monotonic_ns = 3; // Nanoseconds on the monotonic clock.
+  // State of the process's main thread from /proc/<pid>/stat, when sampled.
+  // Exactly one Unicode scalar, matching Rust char; absent means unavailable.
+  optional string process_state = 4;
+  oneof resource {
+    MemoryRecord memory = 10;
+    CpuRecord cpu = 11;
+    StorageRecord storage = 12;
+    ThreadRecords threads = 13;
+    NetworkRecord network = 14;
+  }
+}
+
+message ProcessIdentity {
+  uint32 pid = 1;
+  uint64 start_time_ticks = 2; // Clock ticks since system boot.
+  optional string logical_label = 3;
+  ProcessSecurityLabel security_label = 4;
+}
+
+message ProcessSecurityLabel {
+  string module = 1;
+  string value = 2;
+}
+
+// =============================================================================
+// Shared normal resource records and measurements
+// =============================================================================
+
+// CPU, storage, and network records below are shared by processes and threads.
+// The enclosing record supplies identity, timestamp, and measurement scope.
+// Process totals and their individual thread measurements overlap; do not add them.
+// IoRates and NetworkRates are also used for system devices and interfaces.
+// Normal measurements stay separate from optional Forensic* capture messages.
+
+// -----------------------------------------------------------------------------
+// CPU
+// -----------------------------------------------------------------------------
+
+// Normal procfs measurements and forensic scheduler capture are independent.
+// At least counters or forensic is required by the application.
+message CpuRecord {
+  // Clock frequency for the normal procfs tick counters.
+  uint64 clock_ticks_per_second = 1;
+  CpuCounters counters = 2;
+  CpuUtilization utilization = 3;
+  ForensicCpuRecord forensic = 4;
+}
+
+message CpuCounters {
+  // Cumulative procfs measurements in clock ticks, separate from capture runtime.
+  optional uint64 user_ticks = 1;
+  optional uint64 system_ticks = 2;
+}
+
+message CpuUtilization {
+  uint64 interval_ns = 1;
+  double percent = 2; // 100 means one CPU is fully busy; multiple threads can exceed 100.
+}
+
+// -----------------------------------------------------------------------------
+// Memory
+// -----------------------------------------------------------------------------
+
+// Address-space measurements used by process observations; threads share that
+// address space and report only their own activity through ForensicMemoryRecord.
+message MemoryRecord {
+  optional uint64 virtual_bytes = 1;
+  optional uint64 resident_bytes = 2;
+  optional uint64 proportional_bytes = 3;
+  ForensicMemoryRecord forensic = 6;
+}
+
+// -----------------------------------------------------------------------------
+// Storage
+// -----------------------------------------------------------------------------
+
+// counters is required by the application; rates is optional.
+message StorageRecord {
+  StorageCounters counters = 1;
+  IoRates rates = 2;
+}
+
+message StorageCounters {
+  optional uint64 read_bytes = 1;
+  optional uint64 write_bytes = 2;
+  optional uint64 read_syscalls = 3;
+  optional uint64 write_syscalls = 4;
+}
+
+// Byte rates for the enclosing process, thread, or system block device.
+// Derive rates from two valid samples of the same identity and source.
+// First samples, counter resets, and identity changes invalidate the baseline.
+message IoRates {
+  uint64 interval_ns = 1;
+  optional double read_bytes_per_second = 2;
+  optional double write_bytes_per_second = 3;
+}
+
+// -----------------------------------------------------------------------------
+// Network
+// -----------------------------------------------------------------------------
+
+// Normal traffic totals reliably attributed to the enclosing process or thread.
+// At least counters or forensic is required by the application; rates is optional.
+message NetworkRecord {
+  NetworkCounters counters = 1;
+  NetworkRates rates = 2;
+  ForensicNetworkRecord forensic = 5;
+}
+
+// Normal cumulative totals over the source's accounting lifetime.
+// Packet counts require a source that provides them. Forensic socket counters
+// are separate measurements and do not implicitly populate these totals.
+message NetworkCounters {
+  optional uint64 rx_bytes = 1;
+  optional uint64 tx_bytes = 2;
+  optional uint64 rx_packets = 3;
+  optional uint64 tx_packets = 4;
+}
+
+// Normal byte rates for the enclosing process, thread, or system interface.
+// Derive rates from two valid samples of the same identity and source.
+// First samples, counter resets, and identity changes invalidate the baseline.
+message NetworkRates {
+  uint64 interval_ns = 1;
+  optional double rx_bytes_per_second = 2;
+  optional double tx_bytes_per_second = 3;
+}
+
+// =============================================================================
+// Shared forensic measurements from eBPF/perf capture
+// =============================================================================
+
+// These types are shared by process and thread observations. The enclosing
+// record supplies identity, timestamp, and scope: one thread or the target
+// process's whole thread group. Process and thread totals overlap; do not add them.
+// Normal procfs values remain in the normal resource records and are not
+// substituted for forensic measurements. An absent forensic message means
+// that resource was not captured; optional zero counters mean measured zero.
+// Counters accumulate during the current capture and reset when capture restarts.
+// Derive deltas/rates only within the same capture session, source, and identity.
+
+// -----------------------------------------------------------------------------
+// Forensic CPU: sched_switch
+// -----------------------------------------------------------------------------
+
+message ForensicCpuRecord {
+  // Cumulative scheduled time observed during this capture, in nanoseconds.
+  // Derive intervals from switched tasks' TIDs; resolve their thread groups
+  // before aggregating for a process. Scheduled residency can include interrupts.
+  // sched_switch alone does not distinguish user time from kernel time.
+  optional uint64 runtime_ns = 1;
+  ForensicCpuUtilization utilization = 2;
+}
+
+// Derived from capture runtime deltas over the specified interval.
+message ForensicCpuUtilization {
+  uint64 interval_ns = 1;
+  double percent = 2; // 100 means one CPU; process totals can exceed 100.
+}
+
+// -----------------------------------------------------------------------------
+// Forensic memory activity: perf software events
+// -----------------------------------------------------------------------------
+
+// Faults are attributed to the thread that incurred them, then aggregated
+// across the target thread group for process-scoped capture.
+// These count memory activity; RSS/PSS and address-space sizes remain process-level.
+// Values count faults, not perf sampling callbacks.
+message ForensicMemoryRecord {
+  // PERF_TYPE_SOFTWARE / PERF_COUNT_SW_PAGE_FAULTS_MIN: no disk I/O required.
+  optional uint64 minor_page_faults = 1;
+  // PERF_TYPE_SOFTWARE / PERF_COUNT_SW_PAGE_FAULTS_MAJ: disk I/O required.
+  optional uint64 major_page_faults = 2;
+}
+
+// -----------------------------------------------------------------------------
+// Forensic network: TCP/UDP socket accounting
+// -----------------------------------------------------------------------------
+
+// Attribute each operation to its executing thread, even when sockets are shared.
+// Process-scoped capture aggregates operations across the target thread group.
+// Intended probes: tcp_sendmsg/tcp_recvmsg, udp_sendmsg/udp_recvmsg,
+// and udpv6_sendmsg/udpv6_recvmsg, paired with their returns.
+// Count each operation once, including IPv6-to-IPv4 fallback paths.
+// These probes provide payload bytes and operation counts, not packet counts.
+message ForensicNetworkRecord {
+  ForensicTcpCounters tcp = 1;
+  ForensicUdpCounters udp = 2;
+  ForensicNetworkRates rates = 3;
+}
+
+// RX/TX are relative to the enclosing process or thread. Count positive
+// send/receive completions, using actual transferred bytes for partial transfers.
+// Exclude errors, zero-byte results, MSG_PEEK, and MSG_ERRQUEUE receives.
+// Messages count successful socket operations, not packets or application frames.
+// Headers and retransmissions are not additional socket payload transfers.
+message ForensicTcpCounters {
+  optional uint64 rx_bytes = 1;
+  optional uint64 tx_bytes = 2;
+  optional uint64 rx_messages = 3;
+  optional uint64 tx_messages = 4;
+}
+
+// RX/TX are relative to the enclosing process or thread; IPv4 and IPv6 are combined.
+// Bytes count received payload copied to the application or payload accepted on send.
+// Account for receive truncation: MSG_TRUNC can return more than was copied.
+// Messages count successful observed datagram operations, including zero-byte ones.
+// Exclude errors, MSG_PEEK, and MSG_ERRQUEUE receives; deduplicate nested probes.
+// Do not infer wire datagram counts from send calls when segmentation is used.
+message ForensicUdpCounters {
+  optional uint64 rx_bytes = 1;
+  optional uint64 tx_bytes = 2;
+  optional uint64 rx_messages = 3;
+  optional uint64 tx_messages = 4;
+}
+
+// Derived from captured TCP/UDP payload totals, separate from normal network rates.
+// Leave a direction absent when the source does not provide its counters.
+message ForensicNetworkRates {
+  uint64 interval_ns = 1;
+  optional double rx_bytes_per_second = 2;
+  optional double tx_bytes_per_second = 3;
+}
+
+// =============================================================================
 // Thread records
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// Thread identity and metadata
 // -----------------------------------------------------------------------------
 
 message ThreadIdentity {
@@ -269,33 +423,12 @@ message ThreadRecord {
   optional uint64 voluntary_context_switches = 7;
   optional uint64 nonvoluntary_context_switches = 8;
   CpuRecord cpu = 9;
+  ForensicMemoryRecord memory = 11;
   StorageRecord storage = 10;
+  NetworkRecord network = 12;
 }
 
 // Preserves a selected thread resource even when its collection is empty.
 message ThreadRecords {
   repeated ThreadRecord entries = 1;
-}
-
-// -----------------------------------------------------------------------------
-// Pressure records
-// -----------------------------------------------------------------------------
-
-message SystemPressureRecord {
-  PressureResourceRecord cpu = 1;
-  PressureResourceRecord memory = 2;
-  PressureResourceRecord io = 3;
-}
-
-// Both some and full are required by the application.
-message PressureResourceRecord {
-  PressureStallRecord some = 1;
-  PressureStallRecord full = 2;
-}
-
-message PressureStallRecord {
-  float avg10_percent = 1;
-  float avg60_percent = 2;
-  float avg300_percent = 3;
-  uint64 total_microseconds = 4;
 }
