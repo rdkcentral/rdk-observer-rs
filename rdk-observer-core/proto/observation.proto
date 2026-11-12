@@ -7,6 +7,10 @@ package rdk.observer.v1;
 // new package version. Optional measurements distinguish unavailable from zero.
 // Message boundaries and batching belong to the delivery protocol.
 
+// -----------------------------------------------------------------------------
+// Observation envelopes and process identity
+// -----------------------------------------------------------------------------
+
 // One process resource observation. process_identity and resource are required
 // by the application, even though proto3 permits their absence on the wire.
 message ObservationRecord {
@@ -47,6 +51,10 @@ message SecurityLabel {
   string value = 2;
 }
 
+// -----------------------------------------------------------------------------
+// CPU records
+// -----------------------------------------------------------------------------
+
 // counters is required by the application; utilization is optional.
 message CpuRecord {
   uint64 clock_ticks_per_second = 1;
@@ -57,92 +65,6 @@ message CpuRecord {
 message CpuCounters {
   optional uint64 user_ticks = 1;
   optional uint64 system_ticks = 2;
-}
-
-message CpuUtilization {
-  uint64 interval_ns = 1;
-  double percent = 2; // 100 means one CPU, or all CPUs for system records.
-}
-
-message MemoryRecord {
-  optional uint64 virtual_bytes = 1;
-  optional uint64 resident_bytes = 2;
-  optional uint64 proportional_bytes = 3;
-}
-
-// counters is required by the application; rates is optional.
-message StorageRecord {
-  StorageCounters counters = 1;
-  IoRates rates = 2;
-}
-
-message StorageCounters {
-  optional uint64 read_bytes = 1;
-  optional uint64 write_bytes = 2;
-  optional uint64 read_syscalls = 3;
-  optional uint64 write_syscalls = 4;
-}
-
-message IoRates {
-  uint64 interval_ns = 1;
-  optional double read_bytes_per_second = 2;
-  optional double write_bytes_per_second = 3;
-}
-
-// Traffic reliably attributed to the identified process.
-// counters is required by the application; rates is optional.
-message NetworkRecord {
-  NetworkCounters counters = 1;
-  NetworkRates rates = 2;
-}
-
-// Cumulative measurements over the source's accounting lifetime, which may
-// begin after process start. Packet counts require a source that provides them.
-message NetworkCounters {
-  optional uint64 rx_bytes = 1;
-  optional uint64 tx_bytes = 2;
-  optional uint64 rx_packets = 3;
-  optional uint64 tx_packets = 4;
-}
-
-// Rates require two valid samples from the same accounting source and identity.
-// First samples, counter resets, and identity changes invalidate the baseline.
-message NetworkRates {
-  uint64 interval_ns = 1;
-  optional double rx_bytes_per_second = 2;
-  optional double tx_bytes_per_second = 3;
-}
-
-message ThreadIdentity {
-  uint32 tid = 1;
-  uint64 start_time_ticks = 2; // Clock ticks since system boot.
-}
-
-// identity is required by the application. Measurements and metadata are optional.
-message ThreadRecord {
-  ThreadIdentity identity = 1;
-  optional string name = 2;
-  optional string state = 3; // Exactly one Unicode scalar, matching Rust char.
-  optional sint64 priority = 4;
-  optional sint32 nice = 5;
-  optional uint32 last_cpu = 6;
-  optional uint64 voluntary_context_switches = 7;
-  optional uint64 nonvoluntary_context_switches = 8;
-  CpuRecord cpu = 9;
-  StorageRecord storage = 10;
-}
-
-// Wrappers preserve a selected resource even when its collection is empty.
-message ThreadRecords {
-  repeated ThreadRecord entries = 1;
-}
-
-message SystemStorageRecords {
-  repeated SystemStorageRecord entries = 1;
-}
-
-message SystemNetworkRecords {
-  repeated SystemNetworkRecord entries = 1;
 }
 
 // counters is required by the application; utilization is optional.
@@ -166,9 +88,46 @@ message SystemCpuCounters {
   optional uint64 guest_nice_ticks = 10;
 }
 
+message CpuUtilization {
+  uint64 interval_ns = 1;
+  double percent = 2; // 100 means one CPU, or all CPUs for system records.
+}
+
+// -----------------------------------------------------------------------------
+// Memory records
+// -----------------------------------------------------------------------------
+
+message MemoryRecord {
+  optional uint64 virtual_bytes = 1;
+  optional uint64 resident_bytes = 2;
+  optional uint64 proportional_bytes = 3;
+}
+
 message SystemMemoryRecord {
   optional uint64 total_bytes = 1;
   optional uint64 available_bytes = 2;
+}
+
+// -----------------------------------------------------------------------------
+// Storage records
+// -----------------------------------------------------------------------------
+
+// counters is required by the application; rates is optional.
+message StorageRecord {
+  StorageCounters counters = 1;
+  IoRates rates = 2;
+}
+
+message StorageCounters {
+  optional uint64 read_bytes = 1;
+  optional uint64 write_bytes = 2;
+  optional uint64 read_syscalls = 3;
+  optional uint64 write_syscalls = 4;
+}
+
+// Preserves a selected storage resource even when its collection is empty.
+message SystemStorageRecords {
+  repeated SystemStorageRecord entries = 1;
 }
 
 // device_identity and counters are required by the application.
@@ -189,6 +148,77 @@ message SystemStorageCounters {
   optional uint64 write_operations = 2;
   optional uint64 read_sectors = 3; // Sectors are always 512 bytes.
   optional uint64 write_sectors = 4;
+}
+
+message IoRates {
+  uint64 interval_ns = 1;
+  optional double read_bytes_per_second = 2;
+  optional double write_bytes_per_second = 3;
+}
+
+// -----------------------------------------------------------------------------
+// Network records: process traffic, TCP/UDP socket accounting, and interfaces
+// -----------------------------------------------------------------------------
+
+// Traffic reliably attributed to the identified process.
+// counters is required by the application; rates, tcp, and udp are optional.
+message NetworkRecord {
+  NetworkCounters counters = 1;
+  NetworkRates rates = 2;
+  TcpCounters tcp = 3; // Optional TCP-only socket accounting from eBPF capture.
+  UdpCounters udp = 4; // Optional UDP-only socket accounting from eBPF capture.
+}
+
+// Cumulative measurements over the source's accounting lifetime, which may
+// begin after process start. Packet counts require a source that provides them.
+message NetworkCounters {
+  optional uint64 rx_bytes = 1;
+  optional uint64 tx_bytes = 2;
+  optional uint64 rx_packets = 3;
+  optional uint64 tx_packets = 4;
+}
+
+// Cumulative TCP socket accounting for the identified process over the capture
+// lifetime, which may begin after process start. RX/TX are relative to that
+// process. Count each completed send/receive operation with a positive return
+// value once; bytes use the actual return value, including partial transfers.
+// Exclude failed/zero-byte operations. Payload bytes exclude protocol headers
+// and are not counted again for TCP retransmissions.
+// "Messages" mean these successful socket operations, not packets, TCP segments,
+// or framed application messages: TCP itself does not preserve message boundaries.
+// Unavailable counters remain absent, and zero means a measured lack of traffic.
+message TcpCounters {
+  optional uint64 rx_bytes = 1;
+  optional uint64 tx_bytes = 2;
+  optional uint64 rx_messages = 3;
+  optional uint64 tx_messages = 4;
+}
+
+// Cumulative UDP socket accounting for the identified process over the capture
+// lifetime. RX/TX are relative to that process. Bytes count payload delivered to
+// the application on receive or accepted by the kernel on send, excluding headers
+// and discarded bytes from truncated receives. Messages count successfully
+// received/sent datagrams, including zero-length datagrams; batched operations
+// count each successful datagram separately. Exclude errors and MSG_PEEK receives.
+// Unavailable counters remain absent, and zero means a measured lack of traffic.
+message UdpCounters {
+  optional uint64 rx_bytes = 1;
+  optional uint64 tx_bytes = 2;
+  optional uint64 rx_messages = 3;
+  optional uint64 tx_messages = 4;
+}
+
+// Rates require two valid samples from the same accounting source and identity.
+// First samples, counter resets, and identity changes invalidate the baseline.
+message NetworkRates {
+  uint64 interval_ns = 1;
+  optional double rx_bytes_per_second = 2;
+  optional double tx_bytes_per_second = 3;
+}
+
+// Preserves a selected network resource even when its collection is empty.
+message SystemNetworkRecords {
+  repeated SystemNetworkRecord entries = 1;
 }
 
 // One network interface observation.
@@ -218,6 +248,38 @@ message SystemNetworkCounters {
   optional uint64 rx_dropped = 7;
   optional uint64 tx_dropped = 8;
 }
+
+// -----------------------------------------------------------------------------
+// Thread records
+// -----------------------------------------------------------------------------
+
+message ThreadIdentity {
+  uint32 tid = 1;
+  uint64 start_time_ticks = 2; // Clock ticks since system boot.
+}
+
+// identity is required by the application. Measurements and metadata are optional.
+message ThreadRecord {
+  ThreadIdentity identity = 1;
+  optional string name = 2;
+  optional string state = 3; // Exactly one Unicode scalar, matching Rust char.
+  optional sint64 priority = 4;
+  optional sint32 nice = 5;
+  optional uint32 last_cpu = 6;
+  optional uint64 voluntary_context_switches = 7;
+  optional uint64 nonvoluntary_context_switches = 8;
+  CpuRecord cpu = 9;
+  StorageRecord storage = 10;
+}
+
+// Preserves a selected thread resource even when its collection is empty.
+message ThreadRecords {
+  repeated ThreadRecord entries = 1;
+}
+
+// -----------------------------------------------------------------------------
+// Pressure records
+// -----------------------------------------------------------------------------
 
 message SystemPressureRecord {
   PressureResourceRecord cpu = 1;
