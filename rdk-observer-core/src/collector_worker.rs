@@ -31,18 +31,14 @@
 //! failures will be reported to the coordinator or runtime; policies remain
 //! to be defined.
 
-use crate::collector_cpu::{read_process_cpu, read_system_cpu};
-use crate::collector_io::{read_process_io, read_system_io};
-use crate::collector_memory::{read_process_memory, read_system_memory};
 use crate::output_model::{
     BlockDeviceIdentity, CpuCounters, CpuUtilization, IoRates, ObservationRecord, ProcessIdentity,
     ResourceRecord, StorageCounters, SystemCpuCounters, SystemRecord, SystemResourceRecord,
     SystemStorageCounters,
 };
-use crate::process_registry::{
-    ProcessKey, ProcessRegistry, ProcessRegistryEvent, RegisteredProcess,
-};
+use crate::process_registry::{ProcessKey, ProcessRegistryEvent, RegisteredProcess};
 use crate::process_worker::ProcessId;
+use crate::runtime::RuntimeContext;
 use rustix::time::{ClockId, clock_gettime};
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
@@ -52,15 +48,6 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::task::{AbortHandle, JoinSet, spawn_blocking};
 use tokio::time::{Instant, MissedTickBehavior};
 use tracing::{error, info, instrument, trace, warn};
-
-/// Interval at which to collect system stats
-const SYSTEM_COLLECTION_INTERVAL: Duration = Duration::from_secs(10);
-
-/// Interval at which to collect each process stats for first few samples
-const PROCESS_COLLECTION_INTERVAL_INITIAL: Duration = Duration::from_secs(1);
-
-/// Interval at which to collect each process stats for longer running processes
-const PROCESS_COLLECTION_INTERVAL_ONGOING: Duration = Duration::from_secs(60);
 
 /// Safeguard to limit number of processes that can be collected at the same time
 static PROCESS_COLLECTION_CONCURRENCY: Semaphore = Semaphore::const_new(4);
@@ -73,10 +60,10 @@ pub enum CollectorEvent {
 
 /// Worker that collect system/process stats with some interval
 pub struct CollectorWorker {
+    /// current runtime context
+    context: RuntimeContext,
     /// events produced to outside consumer
     output_events_tx: tokio::sync::mpsc::Sender<CollectorEvent>,
-    /// global process registry
-    process_registry: ProcessRegistry,
     /// per_pid workers
     per_pid_workers: HashMap<ProcessKey, AbortHandle>,
     /// collector tasks join set
@@ -87,19 +74,20 @@ impl CollectorWorker {
     ////////////////////////////////////////////////////////////////////////////////
     #[instrument(skip_all, "collector")]
     pub async fn run(
+        context: RuntimeContext,
         events_tx: tokio::sync::mpsc::Sender<CollectorEvent>,
-        registry: ProcessRegistry,
     ) {
-        let (snapshot, mut registry_events_rx) = registry.subscribe_with_snapshot();
+        let (snapshot, mut registry_events_rx) = context.registry.subscribe_with_snapshot();
 
         let mut this = Self {
+            context,
             output_events_tx: events_tx.clone(),
-            process_registry: registry.clone(),
             per_pid_workers: Default::default(),
             join_set: Default::default(),
         };
 
-        this.join_set.spawn(SystemWorker::run(events_tx.clone()));
+        this.join_set
+            .spawn(SystemWorker::run(this.context.clone(), events_tx.clone()));
         this.sync_processes(snapshot);
 
         loop {
@@ -108,7 +96,7 @@ impl CollectorWorker {
                     Ok(e) => this.handle_registry_event(e),
                     Err(RecvError::Lagged(count)) => {
                         warn!("missed {count} registry events, resyncing");
-                        let (snapshot, rx) = registry.subscribe_with_snapshot();
+                        let (snapshot, rx) = this.context.registry.subscribe_with_snapshot();
                         registry_events_rx = rx;
                         this.sync_processes(snapshot);
                     }
@@ -159,9 +147,11 @@ impl CollectorWorker {
     fn handle_process_started(&mut self, process: ProcessKey) {
         trace!("started: {process:?}");
 
-        let registry = self.process_registry.clone();
-        let future = PerPidWorker::run(registry, process, self.output_events_tx.clone());
-        let handle = self.join_set.spawn(future);
+        let handle = self.join_set.spawn(PerPidWorker::run(
+            self.context.clone(),
+            process,
+            self.output_events_tx.clone(),
+        ));
 
         if let Some(task) = self.per_pid_workers.insert(process, handle) {
             task.abort();
@@ -180,6 +170,7 @@ impl CollectorWorker {
 
 ////////////////////////////////////////////////////////////////////////////////
 struct SystemWorker {
+    context: RuntimeContext,
     events_tx: tokio::sync::mpsc::Sender<CollectorEvent>,
     last_cpu_record: Option<(Duration, SystemCpuCounters)>,
     last_io_records: Option<(
@@ -191,13 +182,14 @@ struct SystemWorker {
 impl SystemWorker {
     ////////////////////////////////////////////////////////////////////////////////
     #[instrument(skip_all, "collector/system")]
-    async fn run(events_tx: tokio::sync::mpsc::Sender<CollectorEvent>) {
+    async fn run(context: RuntimeContext, events_tx: tokio::sync::mpsc::Sender<CollectorEvent>) {
         trace!("started");
 
-        let mut interval = tokio::time::interval(SYSTEM_COLLECTION_INTERVAL);
+        let mut interval = tokio::time::interval(context.config.system_collection_interval);
         interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         let mut this = Self {
+            context,
             events_tx,
             last_cpu_record: None,
             last_io_records: None,
@@ -226,7 +218,9 @@ impl SystemWorker {
     async fn collect_io(&mut self) -> anyhow::Result<()> {
         trace!("collecting io");
 
-        let mut records = spawn_blocking(read_system_io).await??;
+        let context = self.context.clone();
+        let mut records = spawn_blocking(move || context.components.read_system_io()).await??;
+
         let ts_monotonic = get_monotonic_time();
         let ts_unix_epoch = get_unix_epoch_time();
 
@@ -291,7 +285,9 @@ impl SystemWorker {
     async fn collect_cpu(&mut self) -> anyhow::Result<()> {
         trace!("collecting cpu");
 
-        let mut record = spawn_blocking(read_system_cpu).await??;
+        let context = self.context.clone();
+        let mut record = spawn_blocking(move || context.components.read_system_cpu()).await??;
+
         let ts_monotonic = get_monotonic_time();
         let ts_unix_epoch = get_unix_epoch_time();
 
@@ -341,7 +337,9 @@ impl SystemWorker {
     async fn collect_memory(&mut self) -> anyhow::Result<()> {
         trace!("collecting memory");
 
-        let record = spawn_blocking(read_system_memory).await??;
+        let context = self.context.clone();
+        let record = spawn_blocking(move || context.components.read_system_memory()).await??;
+
         let ts_monotonic = get_monotonic_time();
         let ts_unix_epoch = get_unix_epoch_time();
 
@@ -359,8 +357,8 @@ impl SystemWorker {
 
 ////////////////////////////////////////////////////////////////////////////////
 struct PerPidWorker {
+    context: RuntimeContext,
     pending_events: Vec<CollectorEvent>,
-    process_registry: ProcessRegistry,
     process: ProcessKey,
     last_cpu_record: Option<(Duration, CpuCounters)>,
     last_storage_record: Option<(Duration, StorageCounters)>,
@@ -370,19 +368,20 @@ impl PerPidWorker {
     ////////////////////////////////////////////////////////////////////////////////
     #[instrument(skip_all, "collector/process", fields(pid = %process.pid))]
     async fn run(
-        process_registry: ProcessRegistry,
+        context: RuntimeContext,
         process: ProcessKey,
         events_tx: tokio::sync::mpsc::Sender<CollectorEvent>,
     ) {
         trace!("started");
 
         let mut frame_index = 0u32;
-        let mut interval = tokio::time::interval(PROCESS_COLLECTION_INTERVAL_INITIAL);
+        let mut interval =
+            tokio::time::interval(context.config.process_collection_interval_initial);
         interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         let mut this = Self {
+            context,
             pending_events: vec![],
-            process_registry,
             process,
             last_cpu_record: None,
             last_storage_record: None,
@@ -418,7 +417,7 @@ impl PerPidWorker {
             // all consecutive frames are collected with slower interval
             frame_index = frame_index.saturating_add(1);
             if frame_index == 2 {
-                let jitter_range = PROCESS_COLLECTION_INTERVAL_ONGOING;
+                let jitter_range = this.context.config.process_collection_interval_ongoing;
                 let jitter_in = rand::random::<f32>() * jitter_range.as_secs_f32();
                 let jitter_at = Instant::now() + Duration::from_secs_f32(jitter_in);
 
@@ -432,14 +431,17 @@ impl PerPidWorker {
     /// Stores the latest records of this frame in the registry with a single lock
     fn update_registry_from_events(&self) {
         let (mut io, mut cpu, mut memory) = (None, None, None);
+
         for event in &self.pending_events {
             let CollectorEvent::Process((_, record)) = event else {
                 continue;
             };
+
+            let ts = Duration::from_nanos(record.timestamp_unix_ns);
             match &record.resource {
-                ResourceRecord::Storage(e) => io = Some(e.clone()),
-                ResourceRecord::Cpu(e) => cpu = Some(e.clone()),
-                ResourceRecord::Memory(e) => memory = Some(e.clone()),
+                ResourceRecord::Storage(e) => io = Some((ts, e.clone())),
+                ResourceRecord::Cpu(e) => cpu = Some((ts, e.clone())),
+                ResourceRecord::Memory(e) => memory = Some((ts, e.clone())),
                 ResourceRecord::Threads(_) => {
                     // registry doesn't keep thread records yet
                 }
@@ -452,7 +454,7 @@ impl PerPidWorker {
 
         // 1. all records are cloned outside the lock to reduce locked time
         // 2. records that failed this frame keep their previous value
-        self.process_registry.update_process(&self.process, |e| {
+        self.context.registry.update_process(&self.process, |e| {
             if let Some(io) = io {
                 e.last_io_record = Some(io);
             }
@@ -469,8 +471,11 @@ impl PerPidWorker {
     async fn collect_io(&mut self) -> anyhow::Result<()> {
         trace!("collecting io");
 
-        let pid = self.process.pid.0;
-        let mut record = spawn_blocking(move || read_process_io(pid)).await??;
+        let process = self.process.pid;
+        let context = self.context.clone();
+        let mut record =
+            spawn_blocking(move || context.components.read_process_io(process)).await??;
+
         let ts_monotonic = get_monotonic_time();
         let ts_unix_epoch = get_unix_epoch_time();
 
@@ -518,9 +523,11 @@ impl PerPidWorker {
     async fn collect_cpu(&mut self) -> anyhow::Result<()> {
         trace!("collecting cpu");
 
-        let pid = self.process.pid.0;
-        let start_time = self.process.start_time;
-        let mut record = spawn_blocking(move || read_process_cpu(pid, start_time)).await??;
+        let process = self.process;
+        let context = self.context.clone();
+        let mut record =
+            spawn_blocking(move || context.components.read_process_cpu(process)).await??;
+
         let ts_monotonic = get_monotonic_time();
         let ts_unix_epoch = get_unix_epoch_time();
 
@@ -558,8 +565,11 @@ impl PerPidWorker {
     async fn collect_memory(&mut self) -> anyhow::Result<()> {
         trace!("collecting memory");
 
-        let pid = self.process.pid.0;
-        let record = spawn_blocking(move || read_process_memory(pid)).await??;
+        let process = self.process.pid;
+        let context = self.context.clone();
+        let record =
+            spawn_blocking(move || context.components.read_process_memory(process)).await??;
+
         let ts_monotonic = get_monotonic_time();
         let ts_unix_epoch = get_unix_epoch_time();
 
