@@ -1642,6 +1642,7 @@ dependencies = [
  "anyhow",
  "futures",
  "hashlink",
+ "indexmap",
  "libc",
  "neli",
  "parking_lot 0.13.0",
