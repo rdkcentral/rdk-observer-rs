@@ -38,6 +38,7 @@ use crate::process_discovery::{
     NetlinkProcessExitEvent, NetlinkProcessForkEvent,
 };
 use crate::process_registry::ProcessRegistryWriter;
+use crate::runtime::RuntimeContext;
 use procfs::ProcError;
 use procfs::process::{Process, Stat, StatFlags};
 use std::collections::hash_map::Entry;
@@ -75,6 +76,12 @@ pub struct ProcessId(pub i32);
 impl Display for ProcessId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Display::fmt(&self.0, f)
+    }
+}
+
+impl From<u32> for ProcessId {
+    fn from(value: u32) -> Self {
+        Self(value.cast_signed())
     }
 }
 
@@ -119,6 +126,8 @@ struct UnverifiedProcessInfo {
 }
 
 pub struct ProcessWorker {
+    /// current observer runtime context
+    context: RuntimeContext,
     /// list of currently active processes
     processes: HashMap<ProcessId, VerifiedProcessInfo>,
     /// list of unverified processes with /proc record missing (usually short-lived)
@@ -145,7 +154,7 @@ impl ProcessWorker {
     ////////////////////////////////////////////////////////////////////////////////
     /// Runs until cancelled, registry is expected to be empty on start
     #[instrument(skip_all, "proc_worker")]
-    pub async fn run(registry: ProcessRegistryWriter) {
+    pub async fn run(context: RuntimeContext, registry: ProcessRegistryWriter) {
         let mut refresh_interval = tokio::time::interval(PID_REFETCH_INTERVAL_FALLBACK);
         refresh_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
@@ -153,6 +162,7 @@ impl ProcessWorker {
         unverified_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         let mut this = Self {
+            context,
             processes: Default::default(),
             unverified_processes: Default::default(),
             discovery: Default::default(),
@@ -261,7 +271,7 @@ impl ProcessWorker {
                 created_at: Instant::now(),
             },
         ) {
-            self.registry.register_unverified_process(old.info);
+            self.register_unverified_process(old.info);
         }
     }
 
@@ -364,7 +374,7 @@ impl ProcessWorker {
             // unless it was already removed from /proc when processing previous events
             if is_main_thread && !found {
                 if self.finished_processes.remove(&process_id).is_none() {
-                    self.registry.register_unverified_process(ProcessInfo {
+                    self.register_unverified_process(ProcessInfo {
                         pid: process_id,
                         kernel_thread: false,
                         command: UNVERIFIED_PROCESS_COMMAND.to_string(),
@@ -400,7 +410,7 @@ impl ProcessWorker {
         {
             let mut process = e.remove().info;
             process.exit_result = Some(event.exit_result);
-            self.registry.register_unverified_process(process);
+            self.register_unverified_process(process);
         }
 
         if is_main_thread {
@@ -445,12 +455,14 @@ impl ProcessWorker {
         self.finished_processes
             .retain(|_, e| e.elapsed() < UNVERIFIED_PROCESS_TIMEOUT);
 
-        for (pid, e) in self
+        let expired: Vec<_> = self
             .unverified_processes
             .extract_if(|_, e| e.created_at.elapsed() >= UNVERIFIED_PROCESS_TIMEOUT)
-        {
+            .collect();
+
+        for (pid, e) in expired {
             self.finished_processes.insert(pid, Instant::now());
-            self.registry.register_unverified_process(e.info.clone());
+            self.register_unverified_process(e.info);
         }
     }
 
@@ -521,32 +533,55 @@ impl ProcessWorker {
         // 2.
         // empty thread list means it could not be read, which is not a proof of thread exit
 
+        // 3.
+        // processes rejected by the filter are still tracked to handle their events,
+        // but not registered. command changes on exec or rename, so a process can start
+        // passing the filter later; once registered it stays registered until exit
+
         if let Some(e) = self.unverified_processes.remove(&process.info.pid)
             && process.info.start_time > e.info.start_time
         {
-            self.registry.register_unverified_process(e.info.clone());
+            self.register_unverified_process(e.info);
         }
 
+        let process_filter = &self.context.config.process_filter;
         match self.processes.entry(process.info.pid) {
             Entry::Occupied(mut e) => {
                 if e.get().info.start_time == process.info.start_time {
                     let tracked = e.into_mut();
                     tracked.info.command = process.info.command;
-                    self.registry.update_process(&tracked.info);
 
                     if !process.threads.is_empty() {
                         tracked.threads = process.threads;
                     }
+
+                    if !self.registry.update_process(&tracked.info)
+                        && process_filter.allows(&tracked.info)
+                    {
+                        self.registry.register_process(&tracked.info);
+                    }
                 } else {
-                    let old = e.insert(process.clone());
-                    self.registry.unregister_process(&old.info);
-                    self.registry.register_process(&process.info);
+                    self.registry.unregister_process(&e.get().info);
+                    if process_filter.allows(&process.info) {
+                        self.registry.register_process(&process.info);
+                    }
+                    e.insert(process);
                 }
             }
             Entry::Vacant(e) => {
-                e.insert(process.clone());
-                self.registry.register_process(&process.info);
+                if process_filter.allows(&process.info) {
+                    self.registry.register_process(&process.info);
+                }
+                e.insert(process);
             }
+        }
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    /// Adds unverified process to the registry history if it passes the filter
+    fn register_unverified_process(&self, process: ProcessInfo) {
+        if self.context.config.process_filter.allows(&process) {
+            self.registry.register_unverified_process(process);
         }
     }
 }
