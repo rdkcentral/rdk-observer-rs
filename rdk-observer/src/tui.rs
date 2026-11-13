@@ -524,7 +524,7 @@ fn cpu_utilization(process: &RegisteredProcess) -> Option<f64> {
     process
         .last_cpu_record
         .as_ref()
-        .and_then(|record| record.utilization)
+        .and_then(|record| record.1.utilization)
         .map(|value| value.percent)
 }
 
@@ -540,28 +540,28 @@ fn process_virtual_memory(process: &RegisteredProcess) -> Option<u64> {
     process
         .last_memory_record
         .as_ref()
-        .and_then(|record| record.virtual_bytes)
+        .and_then(|record| record.1.virtual_bytes)
 }
 
 fn process_resident_memory(process: &RegisteredProcess) -> Option<u64> {
     process
         .last_memory_record
         .as_ref()
-        .and_then(|record| record.resident_bytes)
+        .and_then(|record| record.1.resident_bytes)
 }
 
 fn process_proportional_memory(process: &RegisteredProcess) -> Option<u64> {
     process
         .last_memory_record
         .as_ref()
-        .and_then(|record| record.proportional_bytes)
+        .and_then(|record| record.1.proportional_bytes)
 }
 
 fn process_read_rate(process: &RegisteredProcess) -> Option<f64> {
     process
         .last_io_record
         .as_ref()
-        .and_then(|record| record.rates.as_ref())
+        .and_then(|record| record.1.rates.as_ref())
         .and_then(|rates| rates.read_bytes_per_second)
 }
 
@@ -569,7 +569,7 @@ fn process_write_rate(process: &RegisteredProcess) -> Option<f64> {
     process
         .last_io_record
         .as_ref()
-        .and_then(|record| record.rates.as_ref())
+        .and_then(|record| record.1.rates.as_ref())
         .and_then(|rates| rates.write_bytes_per_second)
 }
 

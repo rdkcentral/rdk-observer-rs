@@ -12,9 +12,9 @@
 use crate::output_model::{CpuRecord, MemoryRecord, StorageRecord};
 use crate::process_worker::{ProcessId, ProcessInfo};
 use hashlink::LinkedHashMap;
+use indexmap::IndexMap;
+use indexmap::map::Entry;
 use parking_lot::RwLock;
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
@@ -109,7 +109,7 @@ pub struct ProcessRegistry {
 #[derive(Debug)]
 struct ProcessRegistryState {
     /// currently alive processes
-    processes: HashMap<ProcessKey, RegisteredProcess>,
+    processes: IndexMap<ProcessKey, RegisteredProcess>,
     /// history of recently finished processes, oldest first
     finished_processes: LinkedHashMap<ProcessKey, RegisteredProcess>,
     /// broadcast events about process changes
@@ -176,6 +176,28 @@ impl ProcessRegistry {
     pub fn get_finished_snapshot(&self) -> Vec<RegisteredProcess> {
         let state = self.state.read();
         state.finished_processes.values().cloned().collect()
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    /// Returns the number of currently registered processes
+    pub fn len(&self) -> usize {
+        self.state.read().processes.len()
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    /// Returns `true` if there are no registered processes
+    pub fn is_empty(&self) -> bool {
+        self.state.read().processes.is_empty()
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    /// Gets a clone of process by its positional index in the registry
+    pub fn get_by_index(&self, index: usize) -> Option<RegisteredProcess> {
+        self.state
+            .read()
+            .processes
+            .get_index(index)
+            .map(|(_, process)| process.clone())
     }
 }
 
@@ -254,7 +276,7 @@ impl ProcessRegistryWriter {
         let key = ProcessKey::from(process);
         let state = &mut *self.state.write();
 
-        let mut removed = state.processes.remove(&key)?;
+        let mut removed = state.processes.shift_remove(&key)?;
         removed.exit_result = process.exit_result;
 
         state.push_finished_process(removed.clone());
