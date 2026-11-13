@@ -436,6 +436,7 @@ impl PerPidWorker {
             let CollectorEvent::Process((_, record)) = event else {
                 continue;
             };
+
             let ts = Duration::from_nanos(record.timestamp_unix_ns);
             match &record.resource {
                 ResourceRecord::Storage(e) => io = Some((ts, e.clone())),
