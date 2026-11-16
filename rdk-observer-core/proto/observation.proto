@@ -197,6 +197,39 @@ message ProcessSecurityLabel {
   string module = 1;
   string value = 2;
 }
+// =============================================================================
+// Thread records
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// Thread identity and metadata
+// -----------------------------------------------------------------------------
+
+message ThreadIdentity {
+  uint32 tid = 1;
+  uint64 start_time_ticks = 2; // Clock ticks since system boot.
+}
+
+// identity is required by the application. Measurements and metadata are optional.
+message ThreadRecord {
+  ThreadIdentity identity = 1;
+  optional string name = 2;
+  optional string state = 3; // Exactly one Unicode scalar, matching Rust char.
+  optional sint64 priority = 4;
+  optional sint32 nice = 5;
+  optional uint32 last_cpu = 6;
+  optional uint64 voluntary_context_switches = 7;
+  optional uint64 nonvoluntary_context_switches = 8;
+  CpuRecord cpu = 9;
+  ForensicMemoryRecord memory = 11;
+  StorageRecord storage = 10;
+  NetworkRecord network = 12;
+}
+
+// Preserves a selected thread resource even when its collection is empty.
+message ThreadRecords {
+  repeated ThreadRecord entries = 1;
+}
 
 // =============================================================================
 // Shared normal resource records and measurements
@@ -399,36 +432,3 @@ message ForensicNetworkRates {
   optional double tx_bytes_per_second = 3;
 }
 
-// =============================================================================
-// Thread records
-// =============================================================================
-
-// -----------------------------------------------------------------------------
-// Thread identity and metadata
-// -----------------------------------------------------------------------------
-
-message ThreadIdentity {
-  uint32 tid = 1;
-  uint64 start_time_ticks = 2; // Clock ticks since system boot.
-}
-
-// identity is required by the application. Measurements and metadata are optional.
-message ThreadRecord {
-  ThreadIdentity identity = 1;
-  optional string name = 2;
-  optional string state = 3; // Exactly one Unicode scalar, matching Rust char.
-  optional sint64 priority = 4;
-  optional sint32 nice = 5;
-  optional uint32 last_cpu = 6;
-  optional uint64 voluntary_context_switches = 7;
-  optional uint64 nonvoluntary_context_switches = 8;
-  CpuRecord cpu = 9;
-  ForensicMemoryRecord memory = 11;
-  StorageRecord storage = 10;
-  NetworkRecord network = 12;
-}
-
-// Preserves a selected thread resource even when its collection is empty.
-message ThreadRecords {
-  repeated ThreadRecord entries = 1;
-}
