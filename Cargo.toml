@@ -12,7 +12,7 @@ tokio = { version = "1.54.1", default-features = false }
 tokio-util = "0.7.20"
 neli = { version = "0.7.5", default-features = false }
 rustix = "1.1.6"
-procfs = "0.18.0"
+procfs = { version = "0.18.0", default-features = false }
 clap = "4.6.7"
 libc = "0.2.191"
 rand = "0.10.3"
