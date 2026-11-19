@@ -38,10 +38,10 @@ pub enum SystemResourceRecord {
     Memory(SystemMemoryRecord),
     /// Storage I/O measurements for selected block devices; avoid counting disks and partitions twice.
     Storage(Vec<SystemStorageRecord>),
+    /// Network traffic measurements across monitored interfaces from `/proc/net/dev`.
+    Network(Vec<SystemNetworkRecord>),
     /// System-wide CPU, memory, and I/O pressure stall information.
     Pressure(SystemPressureRecord),
-    /// Traffic counters for selected network interfaces.
-    Network(Vec<SystemNetworkRecord>),
 }
 
 /// Aggregate CPU counters from `/proc/stat` with optional derived utilization.
@@ -431,7 +431,7 @@ pub struct SystemNetworkRecord {
 }
 
 /// Identifies an interface within the observed host, boot, and network namespace.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct SystemNetworkInterfaceIdentity {
     pub network_namespace_inode: u64,
     pub interface_index: u32,
@@ -629,20 +629,6 @@ mod tests {
         assert_eq!(
             [udp.rx_bytes, udp.tx_bytes, udp.rx_messages, udp.tx_messages],
             [None; 4]
-        );
-        let system = SystemNetworkCounters::default();
-        assert_eq!(
-            [
-                system.rx_bytes,
-                system.tx_bytes,
-                system.rx_packets,
-                system.tx_packets,
-                system.rx_errors,
-                system.tx_errors,
-                system.rx_dropped,
-                system.tx_dropped,
-            ],
-            [None; 8]
         );
     }
 

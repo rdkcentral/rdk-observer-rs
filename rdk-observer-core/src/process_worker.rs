@@ -37,8 +37,10 @@ use crate::process_discovery::{
     NetlinkProcessCommEvent, NetlinkProcessDiscovery, NetlinkProcessEvent, NetlinkProcessExecEvent,
     NetlinkProcessExitEvent, NetlinkProcessForkEvent,
 };
+use crate::process_registry::ProcessRegistryWriter;
+use crate::runtime::RuntimeContext;
 use procfs::ProcError;
-use procfs::process::{Process, Stat};
+use procfs::process::{Process, Stat, StatFlags};
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
@@ -47,7 +49,7 @@ use tokio::select;
 use tokio::sync::watch::error::RecvError;
 use tokio::task::{JoinError, JoinSet};
 use tokio::time::MissedTickBehavior;
-use tracing::{error, info, instrument, warn};
+use tracing::{error, instrument, warn};
 
 /// Interval at which whole process list is refreshed
 const PID_REFETCH_INTERVAL: Duration = Duration::from_secs(30);
@@ -77,6 +79,12 @@ impl Display for ProcessId {
     }
 }
 
+impl From<u32> for ProcessId {
+    fn from(value: u32) -> Self {
+        Self(value.cast_signed())
+    }
+}
+
 /// Typed Thread ID
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct ThreadId {
@@ -96,6 +104,8 @@ pub struct ProcessInfo {
     pub pid: ProcessId,
     /// command name, might be after creation (fork -> comm)
     pub command: String,
+    /// kernel thread (PF_KTHREAD), always `false` for unverified process
+    pub kernel_thread: bool,
     /// start time in ticks from boot (estimate for unverified process),
     pub start_time: u64,
     /// exit_code when `Ok`, exit_signal when `Err`
@@ -115,25 +125,15 @@ struct UnverifiedProcessInfo {
     created_at: Instant,
 }
 
-/// Process lifecycle event
-#[derive(Debug)]
-pub enum ProcessEvent {
-    ProcessStarted(ProcessInfo),
-    ProcessFinished(ProcessInfo),
-    ProcessUnverified(ProcessInfo),
-    ThreadStarted(ThreadId),
-    ThreadFinished(ThreadId),
-}
-
 pub struct ProcessWorker {
+    /// current observer runtime context
+    context: RuntimeContext,
     /// list of currently active processes
     processes: HashMap<ProcessId, VerifiedProcessInfo>,
     /// list of unverified processes with /proc record missing (usually short-lived)
     unverified_processes: HashMap<ProcessId, UnverifiedProcessInfo>,
     /// real-time process discovery
     discovery: NetlinkProcessDiscovery,
-    /// pending events that require to be sent
-    pending_events: Vec<ProcessEvent>,
     /// interval at which process list is fully updated
     refresh_interval: tokio::time::Interval,
     /// background refresh scan, at most one at a time
@@ -146,12 +146,15 @@ pub struct ProcessWorker {
     /// processes finished before their main thread exit event was handled,
     /// so a delayed event is not reported again as an unverified process
     finished_processes: HashMap<ProcessId, Instant>,
+    /// shared registry of verified processes, updated only by this worker
+    registry: ProcessRegistryWriter,
 }
 
 impl ProcessWorker {
     ////////////////////////////////////////////////////////////////////////////////
+    /// Runs until cancelled, registry is expected to be empty on start
     #[instrument(skip_all, "proc_worker")]
-    pub async fn run(events_tx: tokio::sync::mpsc::Sender<ProcessEvent>) {
+    pub async fn run(context: RuntimeContext, registry: ProcessRegistryWriter) {
         let mut refresh_interval = tokio::time::interval(PID_REFETCH_INTERVAL_FALLBACK);
         refresh_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
@@ -159,15 +162,16 @@ impl ProcessWorker {
         unverified_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         let mut this = Self {
+            context,
             processes: Default::default(),
             unverified_processes: Default::default(),
             discovery: Default::default(),
-            pending_events: Default::default(),
             refresh_interval,
             scans: Default::default(),
             scan_requested: false,
             scan_touched: Default::default(),
             finished_processes: Default::default(),
+            registry,
         };
 
         loop {
@@ -195,12 +199,6 @@ impl ProcessWorker {
             if this.scan_requested && this.scans.is_empty() {
                 this.scan_requested = false;
                 this.scans.spawn_blocking(scan_processes);
-            }
-
-            for event in this.pending_events.drain(..) {
-                if events_tx.send(event).await.is_err() {
-                    return info!("output tx channel is closed, stopping the worker");
-                }
             }
         }
     }
@@ -265,6 +263,7 @@ impl ProcessWorker {
             UnverifiedProcessInfo {
                 info: ProcessInfo {
                     pid: process_id,
+                    kernel_thread: false,
                     command: UNVERIFIED_PROCESS_COMMAND.to_string(),
                     start_time: event.ts_boot_ticks,
                     exit_result: None,
@@ -272,8 +271,7 @@ impl ProcessWorker {
                 created_at: Instant::now(),
             },
         ) {
-            self.pending_events
-                .push(ProcessEvent::ProcessUnverified(old.info));
+            self.register_unverified_process(old.info);
         }
     }
 
@@ -287,14 +285,10 @@ impl ProcessWorker {
             if !self.scans.is_empty() {
                 self.scan_touched.insert(process_id);
             }
-            let thread = ThreadId {
+            process.threads.insert(ThreadId {
                 pid: event.child_tgid,
                 tid: event.child_pid,
-            };
-            if process.threads.insert(thread) {
-                self.pending_events
-                    .push(ProcessEvent::ThreadStarted(thread));
-            }
+            });
         }
     }
 
@@ -316,6 +310,7 @@ impl ProcessWorker {
             .or_insert_with(|| UnverifiedProcessInfo {
                 info: ProcessInfo {
                     pid: process_id,
+                    kernel_thread: false,
                     command: UNVERIFIED_PROCESS_COMMAND.to_string(),
                     start_time: event.ts_boot_ticks,
                     exit_result: None,
@@ -379,13 +374,13 @@ impl ProcessWorker {
             // unless it was already removed from /proc when processing previous events
             if is_main_thread && !found {
                 if self.finished_processes.remove(&process_id).is_none() {
-                    self.pending_events
-                        .push(ProcessEvent::ProcessUnverified(ProcessInfo {
-                            pid: process_id,
-                            command: UNVERIFIED_PROCESS_COMMAND.to_string(),
-                            start_time: event.ts_boot_ticks,
-                            exit_result: Some(event.exit_result),
-                        }));
+                    self.register_unverified_process(ProcessInfo {
+                        pid: process_id,
+                        kernel_thread: false,
+                        command: UNVERIFIED_PROCESS_COMMAND.to_string(),
+                        start_time: event.ts_boot_ticks,
+                        exit_result: Some(event.exit_result),
+                    });
                 }
                 return;
             }
@@ -398,13 +393,11 @@ impl ProcessWorker {
             if event.exit_result.is_err() || is_main_thread || process.info.exit_result.is_some() {
                 process.info.exit_result = Some(event.exit_result);
             }
-            let thread = ThreadId {
-                pid: event.process_tgid,
-                tid: event.process_pid,
-            };
-            if !is_main_thread && process.threads.remove(&thread) {
-                self.pending_events
-                    .push(ProcessEvent::ThreadFinished(thread));
+            if !is_main_thread {
+                process.threads.remove(&ThreadId {
+                    pid: event.process_tgid,
+                    tid: event.process_pid,
+                });
             }
             if tracked {
                 self.update_process_by_pid(process_id).await;
@@ -417,8 +410,7 @@ impl ProcessWorker {
         {
             let mut process = e.remove().info;
             process.exit_result = Some(event.exit_result);
-            self.pending_events
-                .push(ProcessEvent::ProcessUnverified(process));
+            self.register_unverified_process(process);
         }
 
         if is_main_thread {
@@ -438,14 +430,15 @@ impl ProcessWorker {
             Err(e) => return error!("process scan failed: {e}"),
         };
 
-        for (_, process) in self
+        let finished: Vec<_> = self
             .processes
             .extract_if(|e, _| !scanned.contains_key(e) && !scan_touched.contains(e))
-        {
-            self.finished_processes
-                .insert(process.info.pid, Instant::now());
-            self.pending_events
-                .push(ProcessEvent::ProcessFinished(process.info));
+            .map(|(_, e)| e.info)
+            .collect();
+
+        for process in finished {
+            self.finished_processes.insert(process.pid, Instant::now());
+            self.registry.unregister_process(&process);
         }
 
         for (pid, process) in scanned {
@@ -462,13 +455,14 @@ impl ProcessWorker {
         self.finished_processes
             .retain(|_, e| e.elapsed() < UNVERIFIED_PROCESS_TIMEOUT);
 
-        for (pid, e) in self
+        let expired: Vec<_> = self
             .unverified_processes
             .extract_if(|_, e| e.created_at.elapsed() >= UNVERIFIED_PROCESS_TIMEOUT)
-        {
+            .collect();
+
+        for (pid, e) in expired {
             self.finished_processes.insert(pid, Instant::now());
-            self.pending_events
-                .push(ProcessEvent::ProcessUnverified(e.info));
+            self.register_unverified_process(e.info);
         }
     }
 
@@ -516,9 +510,9 @@ impl ProcessWorker {
                     if e.get().info.exit_result.is_none() {
                         return true;
                     }
+                    let process = e.remove().info;
                     self.finished_processes.insert(pid, Instant::now());
-                    self.pending_events
-                        .push(ProcessEvent::ProcessFinished(e.remove().info));
+                    self.registry.unregister_process(&process);
                 }
                 return false;
             }
@@ -539,13 +533,18 @@ impl ProcessWorker {
         // 2.
         // empty thread list means it could not be read, which is not a proof of thread exit
 
+        // 3.
+        // processes rejected by the filter are still tracked to handle their events,
+        // but not registered. command changes on exec or rename, so a process can start
+        // passing the filter later; once registered it stays registered until exit
+
         if let Some(e) = self.unverified_processes.remove(&process.info.pid)
             && process.info.start_time > e.info.start_time
         {
-            self.pending_events
-                .push(ProcessEvent::ProcessUnverified(e.info));
+            self.register_unverified_process(e.info);
         }
 
+        let process_filter = &self.context.config.process_filter;
         match self.processes.entry(process.info.pid) {
             Entry::Occupied(mut e) => {
                 if e.get().info.start_time == process.info.start_time {
@@ -553,33 +552,36 @@ impl ProcessWorker {
                     tracked.info.command = process.info.command;
 
                     if !process.threads.is_empty() {
-                        for thread in process.threads.difference(&tracked.threads) {
-                            self.pending_events
-                                .push(ProcessEvent::ThreadStarted(*thread));
-                        }
-                        for thread in tracked.threads.difference(&process.threads) {
-                            self.pending_events
-                                .push(ProcessEvent::ThreadFinished(*thread));
-                        }
                         tracked.threads = process.threads;
                     }
+
+                    if !self.registry.update_process(&tracked.info)
+                        && process_filter.allows(&tracked.info)
+                    {
+                        self.registry.register_process(&tracked.info);
+                    }
                 } else {
-                    let old = e.insert(process.clone());
-                    self.pending_events
-                        .push(ProcessEvent::ProcessFinished(old.info));
-                    self.pending_events
-                        .push(ProcessEvent::ProcessStarted(process.info));
-                    self.pending_events
-                        .extend(process.threads.into_iter().map(ProcessEvent::ThreadStarted));
+                    self.registry.unregister_process(&e.get().info);
+                    if process_filter.allows(&process.info) {
+                        self.registry.register_process(&process.info);
+                    }
+                    e.insert(process);
                 }
             }
             Entry::Vacant(e) => {
-                e.insert(process.clone());
-                self.pending_events
-                    .push(ProcessEvent::ProcessStarted(process.info));
-                self.pending_events
-                    .extend(process.threads.into_iter().map(ProcessEvent::ThreadStarted));
+                if process_filter.allows(&process.info) {
+                    self.registry.register_process(&process.info);
+                }
+                e.insert(process);
             }
+        }
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    /// Adds unverified process to the registry history if it passes the filter
+    fn register_unverified_process(&self, process: ProcessInfo) {
+        if self.context.config.process_filter.allows(&process) {
+            self.registry.register_unverified_process(process);
         }
     }
 }
@@ -651,6 +653,7 @@ fn parse_process_info_from_stat_if_alive(pid: ProcessId, stat: Stat) -> Option<P
 
     Some(ProcessInfo {
         pid,
+        kernel_thread: StatFlags::from_bits_truncate(stat.flags).contains(StatFlags::PF_KTHREAD),
         command: stat.comm,
         start_time: stat.starttime,
         exit_result: None,

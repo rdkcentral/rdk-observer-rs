@@ -15,7 +15,7 @@
 //! identity changes will invalidate the delta. System counters will provide
 //! context when system and process observations are both enabled.
 
-use anyhow::{Context, anyhow};
+use anyhow::{Context, bail};
 use procfs::process::Process;
 use procfs::{CurrentSI, KernelStats, ticks_per_second};
 
@@ -46,31 +46,23 @@ pub fn read_system_cpu() -> anyhow::Result<SystemCpuRecord> {
     })
 }
 
-/// Reads CPU counters for a process or thread from `/proc/<pid>/stat`.
+/// Reads CPU counters and state for a process or thread from `/proc/<pid>/stat`.
 ///
 /// Checks `expected_starttime` to reject a reused PID or TID. Counters are
 /// returned in clock ticks.
 /// Utilization is not calculated here.
-pub fn read_process_cpu(pid: i32, expected_starttime: u64) -> anyhow::Result<CpuRecord> {
-    read_process_cpu_with_state(pid, expected_starttime).map(|(record, _)| record)
-}
-
-/// Reads CPU counters and state from the same identity-validated stat sample.
-pub(crate) fn read_process_cpu_with_state(
-    pid: i32,
-    expected_starttime: u64,
-) -> anyhow::Result<(CpuRecord, char)> {
+pub fn read_process_cpu(pid: i32, expected_start_time: u64) -> anyhow::Result<(CpuRecord, char)> {
     let process = Process::new(pid).with_context(|| format!("failed to open process {pid}"))?;
 
     let stat = process
         .stat()
         .with_context(|| format!("failed to read /proc/{pid}/stat"))?;
 
-    if stat.starttime != expected_starttime {
-        return Err(anyhow!(
-            "starttime mismatch for PID {pid}: expected {expected_starttime}, found {}",
-            stat.starttime
-        ));
+    if stat.starttime != expected_start_time {
+        bail!(
+            "start time mismatch for PID {pid}: expected {expected_start_time}, found {}",
+            stat.starttime,
+        );
     }
 
     Ok((

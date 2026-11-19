@@ -958,7 +958,11 @@ mod tests {
                 let record = decoded.unwrap();
                 assert_eq!(record.counters.is_some(), normal);
                 assert_eq!(record.forensic.is_some(), forensic);
-                assert_eq!(record.rates.unwrap().rx_bytes_per_second, Some(25.0));
+                assert_eq!(
+                    record.rates.as_ref().unwrap().rx_bytes_per_second,
+                    Some(25.0)
+                );
+
                 let encoded = proto::NetworkRecord::from(&record);
                 if normal {
                     let counters = encoded.counters.unwrap();
@@ -966,6 +970,7 @@ mod tests {
                     assert_eq!(counters.rx_packets, Some(13));
                     assert_eq!(counters.tx_packets, None);
                 }
+
                 if forensic {
                     let capture = encoded.forensic.unwrap();
                     assert_eq!(capture.tcp.unwrap().rx_bytes, Some(u64::MAX));

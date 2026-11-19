@@ -4,13 +4,22 @@
 //! configuration loading, and logging initialization will be added here before
 //! handing control to the runtime once those interfaces are defined.
 
+#[cfg(feature = "tui")]
+mod tui;
+
 use clap::error::ErrorKind;
 use clap::{CommandFactory, Parser};
+use rdk_observer_core::process_filter::ProcessFilter;
+use rdk_observer_core::process_worker::ProcessId;
+use rdk_observer_core::runtime::{Runtime, RuntimeConfig};
+use std::num::NonZeroU64;
+use std::time::Duration;
+use tokio::task::JoinSet;
 use tracing_subscriber::EnvFilter;
-use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
+////////////////////////////////////////////////////////////////////////////////
 /// All processes are captured by default, the options below narrow that scope
 #[derive(Parser, Debug)]
 #[command(version, about)]
@@ -30,26 +39,72 @@ struct Args {
     /// Exclude userspace processes
     #[arg(long)]
     no_userspace_processes: bool,
+    /// Interval in seconds at which to collect system stats
+    #[arg(long, value_name = "SECS", default_value_t = NonZeroU64::new(RuntimeConfig::default().system_collection_interval.as_secs()).unwrap())]
+    system_collection_interval: NonZeroU64,
+    /// Interval in seconds at which to collect each process stats for first few samples
+    #[arg(long, value_name = "SECS", default_value_t = NonZeroU64::new(RuntimeConfig::default().process_collection_interval_initial.as_secs()).unwrap())]
+    process_collection_interval_initial: NonZeroU64,
+    /// Interval in seconds at which to collect each process stats for longer running processes
+    #[arg(long, value_name = "SECS", default_value_t = NonZeroU64::new(RuntimeConfig::default().process_collection_interval_ongoing.as_secs()).unwrap())]
+    process_collection_interval_ongoing: NonZeroU64,
 }
 
+////////////////////////////////////////////////////////////////////////////////
 #[tokio::main]
-async fn main() {
-    // TODO(#9): pass arguments to `runtime::run()` when implemented.
-    let _args = parse_arguments();
+async fn main() -> anyhow::Result<()> {
+    init_logger();
 
-    tracing_subscriber::registry()
-        .with(EnvFilter::from_default_env())
-        .with(
+    let args = parse_arguments();
+    let runtime = Runtime::new(RuntimeConfig {
+        process_filter: ProcessFilter {
+            include_pids: args.pid.into_iter().map(ProcessId::from).collect(),
+            include_commands: args.command.into_iter().collect(),
+            include_rdk_processes: args.rdk_processes,
+            exclude_kernel_threads: args.no_kernel_threads,
+            exclude_userspace_processes: args.no_userspace_processes,
+        },
+        system_collection_interval: Duration::from_secs(args.system_collection_interval.get()),
+        process_collection_interval_initial: Duration::from_secs(
+            args.process_collection_interval_initial.get(),
+        ),
+        process_collection_interval_ongoing: Duration::from_secs(
+            args.process_collection_interval_ongoing.get(),
+        ),
+    });
+
+    let mut join_set = JoinSet::new();
+
+    #[cfg(feature = "tui")]
+    join_set.spawn(tui::run(runtime.registry()));
+    join_set.spawn(runtime.run());
+
+    if let Some(result) = join_set.join_next().await {
+        result??;
+    }
+    Ok(())
+}
+
+////////////////////////////////////////////////////////////////////////////////
+fn init_logger() {
+    let registry = tracing_subscriber::registry().with(EnvFilter::from_default_env());
+
+    #[cfg(not(feature = "tui"))]
+    let registry = {
+        use tracing_subscriber::fmt::format::FmtSpan;
+
+        registry.with(
             tracing_subscriber::fmt::layer()
                 .with_target(true)
                 .with_level(true)
                 .with_span_events(FmtSpan::CLOSE),
         )
-        .init();
+    };
 
-    rdk_observer_core::runtime::run().await;
+    registry.init();
 }
 
+////////////////////////////////////////////////////////////////////////////////
 /// Validate arguments combination that clap cannot express declaratively
 fn parse_arguments() -> Args {
     let args = Args::parse();
