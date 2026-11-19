@@ -62,10 +62,10 @@ metrics but otherwise serve different purposes.
 The results in this table were collected with a metric collection interval of
 <u><strong>1 second</strong></u>.
 
-| Component | CPU | CPU time | Peak memory usage | Processes and threads |
-|---|---:|---:|---:|---:|
-| rdk-observer-rs | 38.6% | 23,149.46 ms | 1,648 KiB | 10 |
-| CPUProcAnalyzer + MemInsight | 73.9% | 44,372.46 ms | 7,764 KiB | 6 |
+| Component | CPU | CPU time | Peak memory usage | Processes, max | Threads, max |
+|---|---:|---:|---:|---:|---:|
+| rdk-observer-rs | 38.6% | 23,149.46 ms | 1,648 KiB | 1 | 10 |
+| CPUProcAnalyzer + MemInsight | 73.9% | 44,372.46 ms | 7,764 KiB | 6 | 11 |
 
 CPU usage by collection interval:
 
@@ -85,6 +85,15 @@ seconds, it used approximately 9.3 times less CPU.
 
 The kernel-recorded cgroup peak was 1,648 KiB for `rdk-observer-rs` and 7,764
 KiB for CPUProcAnalyzer and MemInsight together. 
+
+### Processes and threads
+
+`rdk-observer-rs` stayed at 1 process and 10 threads throughout the test. The 10
+threads are 1 main thread and 9 Tokio runtime or blocking workers.
+
+CPUProcAnalyzer normally runs as 1 process with 4 threads, while MemInsight runs
+as 1 process with 1 thread. Short-lived shell and helper processes increased the
+highest captured values to 6 processes and 11 threads.
 
 ## Context switches and page faults
 
@@ -147,8 +156,8 @@ rdk-observer --system-collection-interval <interval> \
 
 ### Resource measurement
 
-CPU, scheduler events, peak memory, and task count were measured for the
-complete cgroup.
+CPU, scheduler events, peak memory, process count, and thread count were
+measured for the complete cgroup.
 
 ```text
 perf stat -x, -a -G /<cgroup> \
@@ -156,7 +165,8 @@ perf stat -x, -a -G /<cgroup> \
     -- sleep 60
 
 cat /sys/fs/cgroup/memory/<cgroup>/memory.max_usage_in_bytes
-cat /sys/fs/cgroup/pids/<cgroup>/pids.current
+wc -l < /sys/fs/cgroup/pids/<cgroup>/cgroup.procs
+wc -l < /sys/fs/cgroup/pids/<cgroup>/tasks
 ```
 
 ## Benchmark command outputs
@@ -179,8 +189,10 @@ $ perf stat -x, -a -G /rdk-bench-existing-stack-1-366761 \
 
 $ cat /sys/fs/cgroup/memory/rdk-bench-existing-stack-1-366761/memory.max_usage_in_bytes
 7950336
-$ cat /sys/fs/cgroup/pids/rdk-bench-existing-stack-1-366761/pids.current
+$ wc -l < /sys/fs/cgroup/pids/rdk-bench-existing-stack-1-366761/cgroup.procs
 6
+$ wc -l < /sys/fs/cgroup/pids/rdk-bench-existing-stack-1-366761/tasks
+11
 ```
 
 ### rdk-observer-rs
@@ -199,6 +211,8 @@ $ perf stat -x, -a -G /rdk-bench-rdk-observer-1-369146 \
 
 $ cat /sys/fs/cgroup/memory/rdk-bench-rdk-observer-1-369146/memory.max_usage_in_bytes
 1687552
-$ cat /sys/fs/cgroup/pids/rdk-bench-rdk-observer-1-369146/pids.current
+$ wc -l < /sys/fs/cgroup/pids/rdk-bench-rdk-observer-1-369146/cgroup.procs
+1
+$ wc -l < /sys/fs/cgroup/pids/rdk-bench-rdk-observer-1-369146/tasks
 10
 ```
