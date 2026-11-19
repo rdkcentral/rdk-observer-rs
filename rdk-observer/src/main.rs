@@ -9,12 +9,15 @@ mod tui;
 
 use clap::error::ErrorKind;
 use clap::{CommandFactory, Parser};
-use rdk_observer_core::process_registry::ProcessRegistry;
+use rdk_observer_core::runtime::{Runtime, RuntimeConfig};
+use std::num::NonZeroU64;
+use std::time::Duration;
 use tokio::task::JoinSet;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
+////////////////////////////////////////////////////////////////////////////////
 /// All processes are captured by default, the options below narrow that scope
 #[derive(Parser, Debug)]
 #[command(version, about)]
@@ -34,33 +37,46 @@ struct Args {
     /// Exclude userspace processes
     #[arg(long)]
     no_userspace_processes: bool,
+    /// Interval in seconds at which to collect system stats
+    #[arg(long, value_name = "SECS", default_value_t = NonZeroU64::new(RuntimeConfig::default().system_collection_interval.as_secs()).unwrap())]
+    system_collection_interval: NonZeroU64,
+    /// Interval in seconds at which to collect each process stats for first few samples
+    #[arg(long, value_name = "SECS", default_value_t = NonZeroU64::new(RuntimeConfig::default().process_collection_interval_initial.as_secs()).unwrap())]
+    process_collection_interval_initial: NonZeroU64,
+    /// Interval in seconds at which to collect each process stats for longer running processes
+    #[arg(long, value_name = "SECS", default_value_t = NonZeroU64::new(RuntimeConfig::default().process_collection_interval_ongoing.as_secs()).unwrap())]
+    process_collection_interval_ongoing: NonZeroU64,
 }
 
+////////////////////////////////////////////////////////////////////////////////
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // TODO(#9): pass arguments to `runtime::run()` when implemented.
-    let _args = parse_arguments();
-
     init_logger();
 
-    let (process_registry, registry_writer) = ProcessRegistry::new();
-    let mut join_set = JoinSet::<anyhow::Result<()>>::new();
+    let args = parse_arguments();
+    let runtime = Runtime::new(RuntimeConfig {
+        system_collection_interval: Duration::from_secs(args.system_collection_interval.get()),
+        process_collection_interval_initial: Duration::from_secs(
+            args.process_collection_interval_initial.get(),
+        ),
+        process_collection_interval_ongoing: Duration::from_secs(
+            args.process_collection_interval_ongoing.get(),
+        ),
+    });
+
+    let mut join_set = JoinSet::new();
 
     #[cfg(feature = "tui")]
-    join_set.spawn(tui::run(process_registry.clone()));
-
-    join_set.spawn(async move {
-        rdk_observer_core::runtime::run(process_registry, registry_writer).await;
-        Ok(())
-    });
+    join_set.spawn(tui::run(runtime.registry()));
+    join_set.spawn(runtime.run());
 
     if let Some(result) = join_set.join_next().await {
         result??;
     }
-
     Ok(())
 }
 
+////////////////////////////////////////////////////////////////////////////////
 fn init_logger() {
     let registry = tracing_subscriber::registry().with(EnvFilter::from_default_env());
 
@@ -79,6 +95,7 @@ fn init_logger() {
     registry.init();
 }
 
+////////////////////////////////////////////////////////////////////////////////
 /// Validate arguments combination that clap cannot express declaratively
 fn parse_arguments() -> Args {
     let args = Args::parse();
