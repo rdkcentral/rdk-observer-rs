@@ -12,11 +12,12 @@
 use crate::output_model::{CpuRecord, MemoryRecord, StorageRecord};
 use crate::process_worker::{ProcessId, ProcessInfo};
 use hashlink::LinkedHashMap;
+use indexmap::IndexMap;
+use indexmap::map::Entry;
 use parking_lot::RwLock;
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use std::ops::Deref;
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::warn;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -51,9 +52,9 @@ pub struct RegisteredProcess {
     command: String,
     kernel_thread: bool,
     pub exit_result: Option<Result<u32, u32>>,
-    pub last_io_record: Option<StorageRecord>,
-    pub last_cpu_record: Option<CpuRecord>,
-    pub last_memory_record: Option<MemoryRecord>,
+    pub last_io_record: Option<(Duration, StorageRecord)>,
+    pub last_cpu_record: Option<(Duration, CpuRecord)>,
+    pub last_memory_record: Option<(Duration, MemoryRecord)>,
 }
 
 impl RegisteredProcess {
@@ -108,7 +109,7 @@ pub struct ProcessRegistry {
 #[derive(Debug)]
 struct ProcessRegistryState {
     /// currently alive processes
-    processes: HashMap<ProcessKey, RegisteredProcess>,
+    processes: IndexMap<ProcessKey, RegisteredProcess>,
     /// history of recently finished processes, oldest first
     finished_processes: LinkedHashMap<ProcessKey, RegisteredProcess>,
     /// broadcast events about process changes
@@ -142,9 +143,22 @@ impl ProcessRegistry {
     }
 
     ////////////////////////////////////////////////////////////////////////////////
+    /// Returns the number of currently registered processes
+    pub fn get_process_count(&self) -> usize {
+        self.state.read().processes.len()
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
     /// Gets a clone of process by key from the registry
     pub fn get_process(&self, key: &ProcessKey) -> Option<RegisteredProcess> {
         self.state.read().processes.get(key).cloned()
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    /// Gets a clone of process by its positional index in the registry
+    pub fn get_process_by_index(&self, index: usize) -> Option<RegisteredProcess> {
+        let state = self.state.read();
+        state.processes.get_index(index).map(|(_, e)| e.clone())
     }
 
     ////////////////////////////////////////////////////////////////////////////////
@@ -253,7 +267,7 @@ impl ProcessRegistryWriter {
         let key = ProcessKey::from(process);
         let state = &mut *self.state.write();
 
-        let mut removed = state.processes.remove(&key)?;
+        let mut removed = state.processes.swap_remove(&key)?;
         removed.exit_result = process.exit_result;
 
         state.push_finished_process(removed.clone());
@@ -347,7 +361,7 @@ mod tests {
         // old process collects data and exits, then its PID is reused
         assert!(writer.register_process(&old));
         registry.update_process(&old_key, |e| {
-            e.last_memory_record = Some(MemoryRecord::default());
+            e.last_memory_record = Some((Duration::default(), MemoryRecord::default()));
         });
         writer.unregister_process(&ProcessInfo {
             exit_result: Some(Ok(0)),
