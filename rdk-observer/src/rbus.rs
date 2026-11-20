@@ -76,7 +76,7 @@ impl RBusProviderTableSync for RBus_ProcessStatus {
 
     ////////////////////////////////////////////////////////////////////////////////
     fn len(&mut self, _a: RBusProviderTableSyncArgs<Self::UserData>) -> Result<u32, RBusError> {
-        Ok(self.0.len() as u32)
+        Ok(self.0.get_process_count() as u32)
     }
 }
 
@@ -88,7 +88,7 @@ impl RBusProviderGetter for RBus_ProcessStatus {
         let name = &**args.path_name;
 
         if name == b"ProcessNumberOfEntries" {
-            args.property.set(&(self.0.len() as u32));
+            args.property.set(&(self.0.get_process_count() as u32));
             return Ok(());
         }
 
@@ -96,7 +96,7 @@ impl RBusProviderGetter for RBus_ProcessStatus {
             return Err(RBusError::ElementDoesNotExists);
         };
 
-        let Some(process) = self.0.get_by_index(process_idx as usize) else {
+        let Some(process) = self.0.get_process_by_index(process_idx as usize) else {
             return Err(RBusError::ElementDoesNotExists);
         };
 
@@ -106,8 +106,8 @@ impl RBusProviderGetter for RBus_ProcessStatus {
             b"Size" => {
                 let record = process.last_memory_record.as_ref();
                 let bytes = record.and_then(|(_, e)| e.virtual_bytes).unwrap_or(0);
-                let size_kib = (bytes / 1024).min(u32::MAX as u64) as u32;
-                args.property.set(&size_kib);
+                let size_bytes = bytes.min(u32::MAX as u64) as u32;
+                args.property.set(&size_bytes);
             }
             b"CPUTime" => {
                 let record = process.last_cpu_record.as_ref();

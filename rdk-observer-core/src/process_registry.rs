@@ -143,9 +143,22 @@ impl ProcessRegistry {
     }
 
     ////////////////////////////////////////////////////////////////////////////////
+    /// Returns the number of currently registered processes
+    pub fn get_process_count(&self) -> usize {
+        self.state.read().processes.len()
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
     /// Gets a clone of process by key from the registry
     pub fn get_process(&self, key: &ProcessKey) -> Option<RegisteredProcess> {
         self.state.read().processes.get(key).cloned()
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    /// Gets a clone of process by its positional index in the registry
+    pub fn get_process_by_index(&self, index: usize) -> Option<RegisteredProcess> {
+        let state = self.state.read();
+        state.processes.get_index(index).map(|(_, e)| e.clone())
     }
 
     ////////////////////////////////////////////////////////////////////////////////
@@ -176,28 +189,6 @@ impl ProcessRegistry {
     pub fn get_finished_snapshot(&self) -> Vec<RegisteredProcess> {
         let state = self.state.read();
         state.finished_processes.values().cloned().collect()
-    }
-
-    ////////////////////////////////////////////////////////////////////////////////
-    /// Returns the number of currently registered processes
-    pub fn len(&self) -> usize {
-        self.state.read().processes.len()
-    }
-
-    ////////////////////////////////////////////////////////////////////////////////
-    /// Returns `true` if there are no registered processes
-    pub fn is_empty(&self) -> bool {
-        self.state.read().processes.is_empty()
-    }
-
-    ////////////////////////////////////////////////////////////////////////////////
-    /// Gets a clone of process by its positional index in the registry
-    pub fn get_by_index(&self, index: usize) -> Option<RegisteredProcess> {
-        self.state
-            .read()
-            .processes
-            .get_index(index)
-            .map(|(_, process)| process.clone())
     }
 }
 
@@ -276,7 +267,7 @@ impl ProcessRegistryWriter {
         let key = ProcessKey::from(process);
         let state = &mut *self.state.write();
 
-        let mut removed = state.processes.shift_remove(&key)?;
+        let mut removed = state.processes.swap_remove(&key)?;
         removed.exit_result = process.exit_result;
 
         state.push_finished_process(removed.clone());
