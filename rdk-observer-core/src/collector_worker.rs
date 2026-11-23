@@ -34,10 +34,12 @@
 use crate::collector_cpu::{read_process_cpu, read_system_cpu};
 use crate::collector_io::{read_process_io, read_system_io};
 use crate::collector_memory::{read_process_memory, read_system_memory};
+use crate::collector_network::read_system_network;
 use crate::output_model::{
-    CpuCounters, CpuUtilization, IoRates, ProcessIdentity, ProcessRecord, ResourceRecord,
-    StorageCounters, SystemBlockDeviceIdentity, SystemCpuCounters, SystemCpuUtilization,
-    SystemRecord, SystemResourceRecord, SystemStorageCounters,
+    CpuCounters, CpuUtilization, IoRates, NetworkRates, ProcessIdentity, ProcessRecord,
+    ResourceRecord, StorageCounters, SystemBlockDeviceIdentity, SystemCpuCounters,
+    SystemCpuUtilization, SystemNetworkCounters, SystemNetworkInterfaceIdentity, SystemRecord,
+    SystemResourceRecord, SystemStorageCounters,
 };
 use crate::process_registry::{ProcessKey, ProcessRegistryEvent, RegisteredProcess};
 use crate::process_worker::ProcessId;
@@ -180,6 +182,10 @@ struct SystemWorker {
         Duration,
         HashMap<SystemBlockDeviceIdentity, SystemStorageCounters>,
     )>,
+    last_network_records: Option<(
+        Duration,
+        HashMap<SystemNetworkInterfaceIdentity, SystemNetworkCounters>,
+    )>,
 }
 
 impl SystemWorker {
@@ -195,6 +201,7 @@ impl SystemWorker {
             events_tx,
             last_cpu_record: None,
             last_io_records: None,
+            last_network_records: None,
         };
 
         loop {
@@ -212,6 +219,9 @@ impl SystemWorker {
             }
             if let Err(e) = this.collect_memory().await {
                 error!("memory collector failed: {e}");
+            }
+            if let Err(e) = this.collect_network().await {
+                error!("network collector failed: {e}");
             }
         }
     }
@@ -344,6 +354,62 @@ impl SystemWorker {
                 timestamp_unix_ns: ts_unix_epoch.as_nanos() as u64,
                 timestamp_monotonic_ns: ts_monotonic.as_nanos() as u64,
                 resource: SystemResourceRecord::Memory(record),
+            }))
+            .await?;
+
+        Ok(())
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    async fn collect_network(&mut self) -> anyhow::Result<()> {
+        trace!("collecting network");
+
+        let mut records = spawn_blocking(read_system_network).await??;
+        let ts_monotonic = get_monotonic_time();
+        let ts_unix_epoch = get_unix_epoch_time();
+
+        fn to_bps(new: Option<u64>, old: Option<u64>, interval: Duration) -> Option<f64> {
+            if interval.is_zero() {
+                return None;
+            }
+            let diff = new?.checked_sub(old?)?;
+            Some(diff as f64 / interval.as_secs_f64())
+        }
+
+        for record in records.iter_mut() {
+            let Some((last_ts, last_records)) = self.last_network_records.as_ref() else {
+                continue;
+            };
+            let Some(last_record) = last_records.get(&record.interface_identity) else {
+                continue;
+            };
+
+            let interval = ts_monotonic.saturating_sub(*last_ts);
+            let rx_bps = to_bps(record.counters.rx_bytes, last_record.rx_bytes, interval);
+            let tx_bps = to_bps(record.counters.tx_bytes, last_record.tx_bytes, interval);
+
+            if rx_bps.is_some() || tx_bps.is_some() {
+                record.rates = Some(NetworkRates {
+                    interval_ns: interval.as_nanos() as u64,
+                    rx_bytes_per_second: rx_bps,
+                    tx_bytes_per_second: tx_bps,
+                });
+            }
+        }
+
+        self.last_network_records = Some((
+            ts_monotonic,
+            records
+                .iter()
+                .map(|e| (e.interface_identity.clone(), e.counters.clone()))
+                .collect(),
+        ));
+
+        self.events_tx
+            .send(CollectorEvent::System(SystemRecord {
+                timestamp_unix_ns: ts_unix_epoch.as_nanos() as u64,
+                timestamp_monotonic_ns: ts_monotonic.as_nanos() as u64,
+                resource: SystemResourceRecord::Network(records),
             }))
             .await?;
 
