@@ -4,6 +4,8 @@
 //! configuration loading, and logging initialization will be added here before
 //! handing control to the runtime once those interfaces are defined.
 
+#[cfg(feature = "rbus")]
+mod rbus;
 #[cfg(feature = "tui")]
 mod tui;
 
@@ -72,6 +74,9 @@ async fn main() -> anyhow::Result<()> {
             args.process_collection_interval_ongoing.get(),
         ),
     });
+
+    #[cfg(feature = "rbus")]
+    let _handle = rbus::RBusConnection::open(runtime.registry());
 
     let mut join_set = JoinSet::new();
 
