@@ -249,7 +249,9 @@ Buffered Protobuf records will be available for an external collector or local p
 
 ### Serialization and Protobuf encoding
 
-Observation records will use Protocol Buffers, as decided in [ADR-0004](docs/architecture/adr/0004-observation-record-format-decision.md). The shared schema and build-time message generation remain to be implemented. The schema will represent memory, CPU, storage, and collections of threads, preserving identities, timestamps, and the distinction between unavailable measurements and measured zero.
+Observation records will use Protocol Buffers, as decided in [ADR-0004](docs/architecture/adr/0004-observation-record-format-decision.md). The [shared schema](rdk-observer-core/proto/observation.proto) defines the wire messages and preserves identities, timestamps, and the distinction between unavailable measurements and measured zero.
+
+Building `rdk-observer-core` runs `prost-build` to generate Rust message types from the schema. Install `protoc` on `PATH` (`protobuf-compiler` on Debian and Ubuntu) or set `PROTOC` to the compiler's path. The generated types are available through `rdk_observer_core::output_encoding::proto`.
 
 The planned encoding flow is:
 
@@ -269,7 +271,7 @@ Rust message types
     Protobuf bytes
 ```
 
-[output_encoding.rs](rdk-observer-core/src/output_encoding.rs) currently describes the planned conversion and encoding/decoding responsibilities. The implementation, public API, transport message boundaries, and batching remain to be defined. Conversion will preserve identities, timestamps, optional values, and thread collections. Keep schema field numbers stable; reserve removed field numbers and names before evolving the schema.
+[output_encoding.rs](rdk-observer-core/src/output_encoding.rs) exposes the generated types and describes the planned conversion and encoding/decoding responsibilities. Record conversion, transport message boundaries, and batching remain to be defined. Conversion will preserve identities, timestamps, optional values, and thread collections. Keep schema field numbers stable and reserve removed field numbers and names before evolving the schema.
 
 Protobuf had the smallest payloads and fastest encoding and decoding in the recorded ADR-0004 benchmark cases. Those results motivate the format choice; performance still needs validation with the actual schema and workload on target devices.
 
