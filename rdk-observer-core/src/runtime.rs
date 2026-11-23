@@ -45,6 +45,7 @@
 //! failure policies remain to be defined.
 
 use crate::collector_worker::{CollectorEvent, CollectorWorker};
+use crate::process_filter::ProcessFilter;
 use crate::process_registry::{ProcessRegistry, ProcessRegistryWriter};
 use crate::process_worker::ProcessWorker;
 use std::ops::Deref;
@@ -63,6 +64,8 @@ const WORKER_RESTART_DELAY: Duration = Duration::from_secs(1);
 /// Process filtering is done in exclude->include order (include has higher priority)
 #[derive(Debug)]
 pub struct RuntimeConfig {
+    /// Filter that dictates which processes are tracked
+    pub process_filter: ProcessFilter,
     /// Interval at which to collect system stats
     pub system_collection_interval: Duration,
     /// Interval at which to collect each process stats for first few samples
@@ -74,6 +77,7 @@ pub struct RuntimeConfig {
 impl Default for RuntimeConfig {
     fn default() -> Self {
         Self {
+            process_filter: Default::default(),
             system_collection_interval: Duration::from_secs(10),
             process_collection_interval_initial: Duration::from_secs(1),
             process_collection_interval_ongoing: Duration::from_secs(60),
@@ -186,13 +190,14 @@ impl Runtime {
         &self,
         start_delay: Option<Duration>,
     ) -> impl Future<Output = ()> + 'static {
+        let context = self.context.clone();
         let registry = self.registry_writer.clone();
 
         async move {
             if let Some(start_delay) = start_delay {
                 tokio::time::sleep(start_delay).await;
             }
-            ProcessWorker::run(registry).await
+            ProcessWorker::run(context, registry).await
         }
     }
 

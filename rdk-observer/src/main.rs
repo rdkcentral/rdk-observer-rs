@@ -9,6 +9,8 @@ mod tui;
 
 use clap::error::ErrorKind;
 use clap::{CommandFactory, Parser};
+use rdk_observer_core::process_filter::ProcessFilter;
+use rdk_observer_core::process_worker::ProcessId;
 use rdk_observer_core::runtime::{Runtime, RuntimeConfig};
 use std::num::NonZeroU64;
 use std::time::Duration;
@@ -55,6 +57,13 @@ async fn main() -> anyhow::Result<()> {
 
     let args = parse_arguments();
     let runtime = Runtime::new(RuntimeConfig {
+        process_filter: ProcessFilter {
+            include_pids: args.pid.into_iter().map(ProcessId::from).collect(),
+            include_commands: args.command.into_iter().collect(),
+            include_rdk_processes: args.rdk_processes,
+            exclude_kernel_threads: args.no_kernel_threads,
+            exclude_userspace_processes: args.no_userspace_processes,
+        },
         system_collection_interval: Duration::from_secs(args.system_collection_interval.get()),
         process_collection_interval_initial: Duration::from_secs(
             args.process_collection_interval_initial.get(),

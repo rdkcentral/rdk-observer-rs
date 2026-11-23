@@ -10,11 +10,10 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table};
 use ratatui::{Frame, Terminal};
+use rdk_observer_core::process_filter::ProcessFilter as CoreProcessFilter;
 use rdk_observer_core::process_registry::{ProcessRegistry, RegisteredProcess};
-use regex::{RegexSet, RegexSetBuilder};
 use std::cmp::Ordering;
 use std::io::Stdout;
-use std::sync::LazyLock;
 use std::time::Duration;
 use tokio::signal::unix::{SignalKind, signal};
 
@@ -27,13 +26,6 @@ const BORDER_STYLE: Style = Style::new().fg(Color::DarkGray);
 const KERNEL_STYLE: Style = Style::new().fg(Color::Magenta);
 const USERSPACE_STYLE: Style = Style::new().fg(Color::Green);
 const UNAVAILABLE_STYLE: Style = Style::new().fg(Color::DarkGray);
-
-static RDK_PROCESS_PATTERNS: LazyLock<RegexSet> = LazyLock::new(|| {
-    RegexSetBuilder::new([r"^ccsp", r"^rdk"])
-        .case_insensitive(true)
-        .build()
-        .expect("invalid RDK process pattern")
-});
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ProcessSortColumn {
@@ -416,7 +408,7 @@ fn calculate_process_totals(
 
         add_process_to_totals(process_totals, process);
 
-        if is_rdk_process(process) {
+        if CoreProcessFilter::is_rdk_process(process.command()) {
             add_process_to_totals(&mut rdk_totals, process);
         }
     }
@@ -506,12 +498,8 @@ fn filter_processes(processes: &mut Vec<RegisteredProcess>, process_filter: Proc
         ProcessFilter::All => true,
         ProcessFilter::Kernel => process.kernel_thread(),
         ProcessFilter::Userspace => !process.kernel_thread(),
-        ProcessFilter::Rdk => is_rdk_process(process),
+        ProcessFilter::Rdk => CoreProcessFilter::is_rdk_process(process.command()),
     });
-}
-
-fn is_rdk_process(process: &RegisteredProcess) -> bool {
-    RDK_PROCESS_PATTERNS.is_match(process.command())
 }
 
 fn header_cell(
