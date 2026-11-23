@@ -249,7 +249,13 @@ Buffered Protobuf records will be available for an external collector or local p
 
 ### Serialization and Protobuf encoding
 
-Observation records will use Protocol Buffers, as decided in [ADR-0004](docs/architecture/adr/0004-observation-record-format-decision.md). The shared schema and build-time message generation remain to be implemented. The schema will represent memory, CPU, storage, and collections of threads, preserving identities, timestamps, and the distinction between unavailable measurements and measured zero.
+Observation records will use Protocol Buffers, as decided in [ADR-0004](docs/architecture/adr/0004-observation-record-format-decision.md). The [shared schema](rdk-observer-core/proto/observation.proto) defines the wire messages and preserves identities, timestamps, and the distinction between unavailable measurements and measured zero.
+
+Cargo runs the `rdk-observer-core` build script, which uses the `prost-build` build dependency to invoke `protoc` on `proto/observation.proto`. When the schema changes, Cargo reruns the script and regenerates `rdk.observer.v1.rs` in Cargo's `OUT_DIR`. [Build script](rdk-observer-core/build.rs)
+
+`output_encoding.rs` declares the `proto` module and uses `include!` to compile the generated file from `OUT_DIR`. This makes types such as `ProcessRecord` and `SystemRecord` available under `rdk_observer_core::output_encoding::proto`. The `prost` dependency provides the `prost::Message` trait for encoding and decoding those types. [Module declaration](rdk-observer-core/src/output_encoding.rs)
+
+Install `protoc` on `PATH` (`protobuf-compiler` on Debian and Ubuntu) or set `PROTOC` to the compiler's path. Use `protoc --version` to check the compiler on `PATH`.
 
 The planned encoding flow is:
 
@@ -269,9 +275,31 @@ Rust message types
     Protobuf bytes
 ```
 
-[output_encoding.rs](rdk-observer-core/src/output_encoding.rs) currently describes the planned conversion and encoding/decoding responsibilities. The implementation, public API, transport message boundaries, and batching remain to be defined. Conversion will preserve identities, timestamps, optional values, and thread collections. Keep schema field numbers stable; reserve removed field numbers and names before evolving the schema.
+The planned observer encoding will convert `output_model` records to generated messages, preserving identities, timestamps, optional values, and thread collections. Transport message boundaries and batching remain to be defined. Keep schema field numbers stable and reserve removed field numbers and names before evolving the schema.
 
 Protobuf had the smallest payloads and fastest encoding and decoding in the recorded ADR-0004 benchmark cases. Those results motivate the format choice; performance still needs validation with the actual schema and workload on target devices.
+
+#### Verify the schema and bindings
+
+From the repository root, validate the schema with `protoc`. The descriptor output goes to `/dev/null`, and a successful check exits silently.
+
+```bash
+protoc -I rdk-observer-core/proto \
+  --descriptor_set_out=/dev/null \
+  rdk-observer-core/proto/observation.proto
+```
+
+Check the Cargo integration to confirm that the build script can generate the bindings and that the crate compiles with them.
+
+```bash
+cargo check -p rdk-observer-core
+```
+
+With Cargo's default target directory, use this command after the check to locate the generated Rust source. Cargo can retain a copy for each build configuration.
+
+```bash
+find target/debug/build -path '*/out/rdk.observer.v1.rs' -print
+```
 
 ### Backend communication
 
