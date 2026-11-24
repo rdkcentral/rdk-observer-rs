@@ -37,7 +37,7 @@ If the connector cannot be used, continue procfs discovery and routine resource 
 
 ### Forensic observer mode
 
-Enter `forensic-observer-mode` only after an anomaly is detected. Runtime coordination will receive an anomaly trigger identifying the affected process or thread and the reason for investigation. Anomaly detection rules and the source of those triggers remain to be defined; adaptive sampling changes in ADR-0002 do not by themselves activate eBPF.
+Enter `forensic-observer-mode` only after an anomaly is detected. Runtime coordination will receive an anomaly trigger identifying the affected process or thread and the reason for investigation. A qualifying trigger is required to activate eBPF, even when ADR-0002's adaptive sampling changes the collection interval. [ADR-0005: Proposed forensic trigger policy](0005-trigger-and-bound-forensic-capture.md)
 
 Validate the target before starting a forensic session. Process targets use PID and start time; thread targets additionally require TID and thread start time, available from `/proc/<pid>/task/<tid>/stat`. Thread instrumentation belongs to forensic scope and does not require routine per-thread sampling in normal mode. Keep netlink discovery, 30-second reconciliation, and normal procfs collectors running while forensic sessions are active.
 

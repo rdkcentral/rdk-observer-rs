@@ -14,17 +14,224 @@ Tools such as `top` and `htop` provide an immediate view of resource use. RDK-Ob
 
 Periodic sampling can miss processes that start and exit between snapshots. Netlink lifecycle notifications will complement procfs snapshots during normal observation, while targeted Aya/eBPF capture will add detail after anomaly detection. Event loss or unavailable netlink support can still leave short-lived processes undiscovered.
 
-## Running the scaffold
+## Comparison of rdk-observer-rs with the Existing RDK Monitoring Stack
 
-```sh
-cargo run --bin rdk-observer
+### Overview
+
+`rdk-observer-rs` is an event-driven system monitor. It reacts to process fork,
+exec, comm, and exit events as they happen, updates its process registry, and
+collects per-process CPU, memory, and I/O metrics. In parallel, it collects
+system-wide CPU, memory, and block-device I/O metrics. A periodic `/proc`
+reconciliation complements event tracking.
+
+CPUProcAnalyzer and MemInsight are two snapshot-based specialized components.
+CPUProcAnalyzer performs process discovery and metric collection through shell
+commands. It periodically checks configured process names and collects CPU and
+basic resource usage. MemInsight periodically scans `/proc` and creates detailed
+system and process memory snapshots. They overlap for some CPU and memory
+metrics but otherwise serve different purposes.
+
+### Metric coverage
+
+| Category | rdk-observer-rs | CPUProcAnalyzer + MemInsight |
+|---|---|---|
+| System CPU | ✅ | ✅ |
+| Process CPU | ✅ | ✅ |
+| System memory | ✅ | ✅ |
+| Process memory | ✅ | ✅ |
+| Process I/O | ✅ | ❌ |
+| System storage I/O | ✅ | ❌ |
+| System network | <span style="color:#d4a000">In Progress</span> | ❌ |
+| System pressure | <span style="color:#d4a000">In Progress</span> | ❌ |
+| Event-based collection | ✅ | <span style="color:#d4a000">EXEC snapshot only</span> |
+| Netlink process lifecycle | ✅ Fork/Exec/Comm/Exit | <span style="color:#d4a000">EXEC snapshot only</span> |
+| Short-lived process discovery | ✅ | <span style="color:#d4a000">Partial</span> |
+| PID reuse-safe identity | ✅ | ❌ |
+| Adaptive collection intervals | ✅ | ❌ |
+| Output | <span style="color:#d4a000">Protobuf binary records (In Progress)</span> | ✅ Text/CSV/JSON/T2 |
+
+### Functional differences
+
+#### rdk-observer-rs
+
+- provides system and process CPU, memory, process I/O, and block-device I/O in
+  one runtime;
+- collects metrics directly in-process without invoking shell commands;
+- reacts to fork, exec, comm, and exit events through netlink instead of waiting
+  for the next periodic scan;
+- reconciles the event-driven process registry with `/proc` periodically;
+- detects short-lived processes and protects against incorrect attribution
+  after PID reuse;
+- supports separate system, initial-process, and ongoing-process collection
+  intervals.
+
+#### CPUProcAnalyzer + MemInsight
+
+- CPUProcAnalyzer uses shell commands for process discovery and metric
+  collection, and provides file-descriptor counts, load-average, RDK
+  client-specific statistics, and process and thread text output;
+- MemInsight provides detailed `smaps` fields, page-fault reports, and CSV,
+  JSON, or T2 output.
+
+### Resource usage
+
+The results in this table were collected with a metric collection interval of
+<u><strong>1 second</strong></u>.
+
+| Component | CPU | CPU time | Peak memory usage | Processes, max | Threads, max |
+|---|---:|---:|---:|---:|---:|
+| rdk-observer-rs | 38.6% | 23,149.46 ms | 1,648 KiB | 1 | 10 |
+| CPUProcAnalyzer + MemInsight | 73.9% | 44,372.46 ms | 7,764 KiB | 6 | 11 |
+
+CPU usage by collection interval:
+
+| Collection interval | rdk-observer-rs CPU | CPUProcAnalyzer + MemInsight CPU |
+|---:|---:|---:|
+| 1 s | 38.6% | 73.9% |
+| 2 s | 23.1% | 77.4% |
+| 5 s | 12.5% | 67.5% |
+| 10 s | 7.1% | 65.9% |
+
+#### CPU
+
+At one second, `rdk-observer-rs` used approximately 1.9 times less CPU. At ten
+seconds, it used approximately 9.3 times less CPU.
+
+#### RAM
+
+The kernel-recorded cgroup peak was 1,648 KiB for `rdk-observer-rs` and 7,764
+KiB for CPUProcAnalyzer and MemInsight together.
+
+#### Processes and threads
+
+`rdk-observer-rs` stayed at 1 process and 10 threads throughout the test. The 10
+threads are 1 main thread and 9 Tokio runtime or blocking workers.
+
+CPUProcAnalyzer normally runs as 1 process with 4 threads, while MemInsight runs
+as 1 process with 1 thread. Short-lived shell and helper processes increased the
+highest captured values to 6 processes and 11 threads.
+
+### Context switches and page faults
+
+| Component | Context switches | Page faults | Major page faults |
+|---|---:|---:|---:|
+| rdk-observer-rs | 129,361 | 2,509 | 0 |
+| CPUProcAnalyzer + MemInsight | 32,769 | 166,479 | 0 |
+
+### Test environment
+
+- architecture: AArch64 GNU/Linux;
+- operating system: RDK 6.1 (kirkstone);
+- Linux kernel: 5.15.162;
+- CPU: 1 virtual Cortex-A53;
+- RAM: 996,908 KiB;
+- swap: disabled;
+- cgroup v1 CPU, memory, pids, and perf-event controllers: available;
+- `/proc/<pid>/io`: available;
+- `/proc/<pid>/smaps_rollup`: available.
+
+### Resource usage benchmark methodology
+
+Each option was measured at collection intervals of 1, 2, 5, and 10
+seconds.
+
+CPUProcAnalyzer and MemInsight were placed in the same cgroup. All their
+processes, threads, and inherited helper processes were therefore included in
+the result. `rdk-observer-rs` was measured in a separate cgroup using the same
+method.
+
+#### Existing stack
+
+CPUProcAnalyzer:
+
+```text
+SleepInterval = <interval>
+TimeToRun = 0
+DynamicProcess = 1
+MonitorAllProcess = 0
+MemoryLimit = 65536
 ```
 
-[`main.rs`](rdk-observer/src/main.rs) calls the library's `runtime::run()` function. It returns exit code 0 on success, or prints the runtime error to standard error and returns exit code 1 on failure. The runtime currently returns an explicit error stating that the observer workers are not implemented, so running the scaffold exits with code 1 and starts no monitoring.
+MemInsight:
 
-The workspace contains the `rdk-observer/` executable crate and the `rdk-observer-core/` library crate. Core modules live in `rdk-observer-core/src/`.
+```text
+meminsight \
+    --iterations 700 \
+    --interval <interval> \
+    --fmt csv \
+    --output <meminsight-directory>
+```
 
-Argument parsing, configuration loading, and logging initialization will be added to `main.rs` when their interfaces are defined. Worker orchestration, observer mode transitions, and shutdown belong in `runtime.rs`.
+#### rdk-observer-rs
+
+```text
+rdk-observer --system-collection-interval <interval> \
+    --process-collection-interval-initial <interval> \
+    --process-collection-interval-ongoing <interval>
+```
+
+#### Resource measurement
+
+CPU, scheduler events, peak memory, process count, and thread count were
+measured for the complete cgroup.
+
+```text
+perf stat -x, -a -G /<cgroup> \
+    -e task-clock,context-switches,cpu-migrations,page-faults,minor-faults,major-faults \
+    -- sleep 60
+
+cat /sys/fs/cgroup/memory/<cgroup>/memory.max_usage_in_bytes
+wc -l < /sys/fs/cgroup/pids/<cgroup>/cgroup.procs
+wc -l < /sys/fs/cgroup/pids/<cgroup>/tasks
+```
+
+### Benchmark command outputs
+
+The following output is from the one-second runs.
+
+#### Existing stack
+
+```console
+$ echo 0 > /sys/fs/cgroup/memory/rdk-bench-existing-stack-1-366761/memory.max_usage_in_bytes
+$ perf stat -x, -a -G /rdk-bench-existing-stack-1-366761 \
+    -e task-clock,context-switches,cpu-migrations,page-faults,minor-faults,major-faults \
+    -- sleep 60
+44372.46,msec,task-clock,/rdk-bench-existing-stack-1-366761,44378536656,100.00,0.739,CPUs utilized
+32769,,context-switches,/rdk-bench-existing-stack-1-366761,44378536656,100.00,738.499,/sec
+0,,cpu-migrations,/rdk-bench-existing-stack-1-366761,44378536656,100.00,0.000,/sec
+166479,,page-faults,/rdk-bench-existing-stack-1-366761,44378536656,100.00,3.752,K/sec
+166479,,minor-faults,/rdk-bench-existing-stack-1-366761,44378536656,100.00,3.752,K/sec
+0,,major-faults,/rdk-bench-existing-stack-1-366761,44378536656,100.00,0.000,/sec
+
+$ cat /sys/fs/cgroup/memory/rdk-bench-existing-stack-1-366761/memory.max_usage_in_bytes
+7950336
+$ wc -l < /sys/fs/cgroup/pids/rdk-bench-existing-stack-1-366761/cgroup.procs
+6
+$ wc -l < /sys/fs/cgroup/pids/rdk-bench-existing-stack-1-366761/tasks
+11
+```
+
+#### rdk-observer-rs
+
+```console
+$ echo 0 > /sys/fs/cgroup/memory/rdk-bench-rdk-observer-1-369146/memory.max_usage_in_bytes
+$ perf stat -x, -a -G /rdk-bench-rdk-observer-1-369146 \
+    -e task-clock,context-switches,cpu-migrations,page-faults,minor-faults,major-faults \
+    -- sleep 60
+23149.46,msec,task-clock,/rdk-bench-rdk-observer-1-369146,23154394464,100.00,0.386,CPUs utilized
+129361,,context-switches,/rdk-bench-rdk-observer-1-369146,23154394464,100.00,5.588,K/sec
+0,,cpu-migrations,/rdk-bench-rdk-observer-1-369146,23154394464,100.00,0.000,/sec
+2509,,page-faults,/rdk-bench-rdk-observer-1-369146,23154394464,100.00,108.383,/sec
+2509,,minor-faults,/rdk-bench-rdk-observer-1-369146,23154394464,100.00,108.383,/sec
+0,,major-faults,/rdk-bench-rdk-observer-1-369146,23154394464,100.00,0.000,/sec
+
+$ cat /sys/fs/cgroup/memory/rdk-bench-rdk-observer-1-369146/memory.max_usage_in_bytes
+1687552
+$ wc -l < /sys/fs/cgroup/pids/rdk-bench-rdk-observer-1-369146/cgroup.procs
+1
+$ wc -l < /sys/fs/cgroup/pids/rdk-bench-rdk-observer-1-369146/tasks
+10
+```
 
 ## Planned tracking options
 
@@ -155,7 +362,7 @@ flowchart TD
 
 The observer will start in `normal-observer-mode`. It will discover existing processes with an initial `/proc` inventory snapshot, reconcile that inventory every 30 seconds, and use the Linux netlink process connector (`NETLINK_CONNECTOR` / `CN_PROC`) for fork, exec, and exit notifications between scans. Normal mode will collect procfs resource measurements without loading or attaching eBPF programs. Netlink will be the normal lifecycle event source.
 
-When an anomaly is detected, `forensic-observer-mode` will add eBPF monitoring for the affected processes or threads. Aya will load and attach the required programs for the forensic session. Normal discovery, reconciliation, and procfs collection will continue during forensic capture. When all forensic sessions end, their eBPF resources will be released and the observer will return to normal mode. Anomaly rules, capture probes, duration, and resource limits remain to be defined.
+A qualifying anomaly will move the observer into `forensic-observer-mode` while normal collection continues. See [Forensic mode](#forensic-mode) for the session lifecycle and proposed triggers.
 
 ```mermaid
 stateDiagram-v2
@@ -229,7 +436,7 @@ Collection intervals, the 30-second discovery reconciliation interval, and outpu
 
 Normal lifecycle notifications will update the Process Registry and let `process_worker` start, stop, or request prompt collection for a target. They will not create a separate monitoring task for every event.
 
-After an anomaly trigger, Aya will provide the Rust interface for loading targeted eBPF programs and consuming their records. Potential forensic investigations include scheduler events, page faults, perf/PMU events, memory-pressure events, kernel tracepoints, and other transient activity. These are candidate capabilities; the required probes, supported kernels, and capture policies remain to be defined. Normal netlink discovery and procfs sampling will continue during a forensic session.
+Forensic sessions will feed timestamped eBPF observations into the output path described below. [Forensic mode](#forensic-mode)
 
 ### Output handling
 
@@ -341,9 +548,48 @@ flowchart TD
     Buffer --> Consumer["External collector or local consumer: interface TBD"]
 ```
 
+## Forensic mode
+
+Forensic mode will collect short, targeted traces to help explain anomalies detected in the observer's resource measurements and process lifecycle events. The runtime will validate the target's PID and start time before starting a session. For a thread target, it will also validate the TID and thread start time. Restart-related rules can identify a component by its `logical_label` and target its next process instance.
+
+Aya will attach the eBPF programs needed for the investigation and filter observations to the validated target. Candidate probes cover scheduler events, page faults, perf/PMU events, memory-pressure events, and kernel tracepoints. Normal netlink discovery, `/proc` reconciliation, and resource sampling will continue during capture. Probe selection, kernel support, capture durations, and resource limits remain to be defined.
+
+The runtime will coalesce repeated triggers for an active target and end each session when its capture policy completes or its target exits. It will release resources as sessions end and return to normal mode when the last session ends. If capture cannot start, the observer will report the failure and continue normal collection. [ADR-0003](docs/architecture/adr/0003-trigger-process-capture-with-bpf-events.md) [ADR-0005](docs/architecture/adr/0005-trigger-and-bound-forensic-capture.md)
+
+### Forensic trigger events
+
+The proposed rules use observer measurements and lifecycle events to select session targets. FT-10 corroborates other rules, and FT-11 records hardware-health observations. Pressure stall information (PSI) thresholds use the kernel's 10-second averages (`avg10`). MAD means median absolute deviation.
+
+| **ID** | **Event** | **Class** | **Target** | **Signal source (observer data)** | **Initial condition** | **Kind** | **Status** |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| FT-1 | Sustained CPU usage | CPU | Process | `CpuRecord` utilization percent | A process uses >=80% of one CPU core in each of 3 consecutive 1 s intervals. | Sustained | Proposed |
+| FT-2 | Recurring CPU spikes | CPU | Process | `CpuRecord` utilization percent | A process crosses 80% of one CPU core in 3 separate episodes within 60 s, dropping below the threshold between episodes. | Episodic | Proposed |
+| FT-3 | Rapid memory growth under pressure | Memory | Process | `MemoryRecord` (`RssAnon`, else `VmRSS`), `SystemMemoryRecord`, memory PSI | A process's RSS increases by both >=20 MiB and >=20% within 60 s while the device has low available memory or elevated memory PSI in `/proc/pressure/memory`. **For review.** Gate on `MemAvailable` <=15%, memory PSI `some avg10` >=10%, or memory PSI `full avg10` >=1%. | Sustained | Proposed |
+| FT-4 | Repeated component restarts | Lifecycle | Component (next instance) | `ProcessEvent.exit_result`, `logical_label` | The same RDK component restarts >=3 times within 60 s after unexpected exits. **For review.** Count fatal signals or non-zero exits. Use 3 restarts in 60 s for capture and 3 in 10 min for informational reporting. | Loop | Proposed |
+| FT-5 | Fatal crash of a critical component | Lifecycle | Process (next instance, only if restarted within 30 s) | `ProcessEvent.exit_result = Err(fatal signal)`, core-dump bit, `logical_label` | One fatal signal (`SIGSEGV`, `SIGBUS`, `SIGABRT`, `SIGILL`, `SIGFPE`, or `SIGSYS`) in a configured critical component adds an impulse score. Start a session only if the component restarts within 30 s. Apply a 5 min cooldown per label and suppress the rule while FT-4 is active. | Impulse | Proposed |
+| FT-6 | OOM kill of a tracked process | Memory | Process (next instance, or top live RSS grower on a repeat kill) | `/proc/vmstat` `oom_kill` counter (collection pending), `exit_result = Err(SIGKILL)`, optional `/dev/kmsg` | The `oom_kill` counter increases by >=1 and a tracked process exited with `SIGKILL` since the previous read. A second kill within 10 min promotes the top live anonymous-RSS grower. Apply a 5 min cooldown. | Impulse | Proposed |
+| FT-7 | Scheduling thrash | CPU / scheduler | Process (hot thread chosen in session) | Per-thread nonvoluntary context switches for watched processes (top 8 threads), CPU PSI | One thread's nonvoluntary context-switch rate is >= `max(100/s, baseline + 6 MAD)` for 5 consecutive 1 s buckets, with CPU PSI `some avg10` >=20%. Clear below 50% of the rate threshold for 5 buckets. | Sustained | Proposed |
+| FT-8 | Per-process I/O storm | Storage | Process | `StorageRecord` counters and rates (`read_bytes`, `write_bytes`), I/O PSI | Writes >=1 MiB/s or reads >=5 MiB/s for 10 s with I/O PSI `some avg10` >=10%, or writes >=16 MiB in 60 s regardless of PSI (flash wear). Use a per-label allowlist for known heavy writers. | Sustained | Proposed |
+| FT-9 | Page-fault bursts (process entry, thread attribution in session) | Memory / scheduler | Process (thread attributed in session) | `minflt` and `majflt` deltas from `/proc/<pid>/stat` (collection pending), perf page-fault events during capture | At least 3 burst buckets in 10 s (major faults >=5/s or minor faults >= `max(2,048/s, baseline + 6 MAD)`), with RSS growth >=10 MiB or the FT-3 pressure gate. | Episodic | Proposed |
+| FT-10 | System memory or PSI collapse | System | None (corroborates FT-3, FT-6, FT-7, FT-8, FT-9) | `SystemMemoryRecord`, CPU, memory, and I/O PSI | Active at `MemAvailable` <=15%, memory PSI `some avg10` >=10% or `full avg10` >=1%, CPU PSI `some avg10` >=20%, or I/O PSI `some avg10` >=10%. Clear at about half the threshold for 30 s. Add a corroborating term to the top 3 contributors without creating a target. | Corroborator | Proposed |
+| FT-11 | Hardware exceptions | Hardware | None (record only) | Kernel log, EDAC counters, thermal zones, reset cause (collection pending) | FT-5 handles process-attributable hardware faults that arrive as `SIGBUS`, `SIGILL`, or `SIGFPE`. Record system hardware-health signals as observations that feed FT-10. | Record only | Proposed |
+
+## Running the scaffold
+
+```sh
+cargo run --bin rdk-observer
+```
+
+[`main.rs`](rdk-observer/src/main.rs) calls the library's `runtime::run()` function. It returns exit code 0 on success, or prints the runtime error to standard error and returns exit code 1 on failure. The runtime currently returns an explicit error stating that the observer workers are not implemented, so running the scaffold exits with code 1 and starts no monitoring.
+
+The workspace contains the `rdk-observer/` executable crate and the `rdk-observer-core/` library crate. Core modules live in `rdk-observer-core/src/`.
+
+Argument parsing, configuration loading, and logging initialization will be added to `main.rs` when their interfaces are defined. Worker orchestration, observer mode transitions, and shutdown belong in `runtime.rs`.
+
 ## Architecture decisions
 
 - [ADR-0001: Collect System Resource Snapshots from procfs](docs/architecture/adr/0001-collect-system-resource-snapshots-from-procfs.md)
 - [ADR-0002: Schedule Per-Process Sampling Workers](docs/architecture/adr/0002-schedule-per-process-sampling-workers.md)
 - [ADR-0003: Discover Processes with procfs and Netlink; Reserve eBPF for Forensics](docs/architecture/adr/0003-trigger-process-capture-with-bpf-events.md)
 - [ADR-0004: Observation Record Format Decision (Protobuf)](docs/architecture/adr/0004-observation-record-format-decision.md)
+- [ADR-0005: Trigger and Bound Forensic Capture](docs/architecture/adr/0005-trigger-and-bound-forensic-capture.md)
