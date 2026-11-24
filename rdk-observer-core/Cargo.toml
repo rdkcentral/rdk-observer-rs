@@ -4,13 +4,17 @@ description = "Core observation types and behavior for rdk-observer"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+rust-version.workspace = true
 publish = false
 
 [dependencies]
+rdk-observer-ebpf-common = { workspace = true, features = ["userspace"] }
+
 tokio = { workspace = true, features = ["rt", "sync", "fs", "time"] }
 neli = { workspace = true, features = ["async"] }
 rustix = { workspace = true, features = ["time"] }
 procfs.workspace = true
+aya.workspace = true
 libc.workspace = true
 rand.workspace = true
 regex.workspace = true
@@ -24,3 +28,5 @@ prost.workspace = true
 
 [build-dependencies]
 prost-build.workspace = true
+aya-build.workspace = true
+anyhow.workspace = true

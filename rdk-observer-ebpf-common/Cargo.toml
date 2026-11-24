@@ -1,0 +1,13 @@
+[package]
+name = "rdk-observer-ebpf-common"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+default = []
+userspace = ["dep:aya"]
+
+[dependencies]
+aya = { workspace = true, optional = true }

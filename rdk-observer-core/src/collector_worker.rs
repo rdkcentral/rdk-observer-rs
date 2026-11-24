@@ -32,6 +32,7 @@
 //! to be defined.
 
 use crate::collector_cpu::{read_process_cpu, read_system_cpu};
+use crate::collector_forensic::ForensicCollector;
 use crate::collector_io::{read_process_io, read_system_io};
 use crate::collector_memory::{read_process_memory, read_system_memory};
 use crate::output_model::{
@@ -81,6 +82,24 @@ impl CollectorWorker {
         events_tx: tokio::sync::mpsc::Sender<CollectorEvent>,
     ) {
         let (snapshot, mut registry_events_rx) = context.registry.subscribe_with_snapshot();
+
+        let forensic_collector = ForensicCollector::new().unwrap();
+        let forensic_subscription = forensic_collector.track_process(ProcessId(9183));
+
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+
+                let Some(threads) = forensic_subscription.threads() else {
+                    continue;
+                };
+
+                info!("QWEQWE threads count: {}", threads.iter().count());
+                for (thread_id, data) in threads.iter().filter_map(|e| e.ok()).take(1) {
+                    info!("QWEQWE {thread_id}: {data:?}");
+                }
+            }
+        });
 
         let mut this = Self {
             context,
