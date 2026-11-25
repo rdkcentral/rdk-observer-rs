@@ -1,0 +1,11 @@
+[package]
+name = "rdk-observer-ebpf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+rdk-observer-ebpf-common = { path = "../rdk-observer-ebpf-common" }
+aya-ebpf.workspace = true

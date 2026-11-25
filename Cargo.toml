@@ -1,20 +1,36 @@
 [workspace]
 resolver = "3"
-members = ["rdk-observer", "rdk-observer-core"]
+members = [
+    "rdk-observer",
+    "rdk-observer-core",
+    "rdk-observer-ebpf",
+    "rdk-observer-ebpf-common",
+]
+default-members = [
+    "rdk-observer",
+    "rdk-observer-core",
+    "rdk-observer-ebpf-common",
+]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
+rust-version = "1.91"
 
 [workspace.dependencies]
+rdk-observer-core = { path = "rdk-observer-core" }
+rdk-observer-ebpf-common = { path = "rdk-observer-ebpf-common" }
 rbus-core = { git = "https://github.com/rdkcentral/ieee1905-rs" }
-rbus-provider = { git = "https://github.com/rdkcentral/ieee1905-rs"}
+rbus-provider = { git = "https://github.com/rdkcentral/ieee1905-rs" }
+
 tokio = { version = "1.54.1", default-features = false }
-tokio-util = "0.7.20"
 neli = { version = "0.7.5", default-features = false }
 rustix = "1.1.6"
 procfs = { version = "0.18.0", default-features = false }
+aya = "0.14.0"
+aya-build = "=0.2.0" # 0.2.1 requires rustc 1.98
+aya-ebpf = "0.2.1"   # 0.3.0 requires rustc 1.98
 clap = "4.6.7"
 libc = "0.2.191"
 rand = "0.10.3"
@@ -37,3 +53,6 @@ debug = false
 opt-level = "z"
 lto = true
 codegen-units = 1
+
+[profile.release.package.rdk-observer-ebpf]
+opt-level = 2
