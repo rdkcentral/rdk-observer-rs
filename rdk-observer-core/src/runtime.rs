@@ -48,6 +48,7 @@ use crate::collector_worker::{CollectorEvent, CollectorWorker};
 use crate::process_filter::ProcessFilter;
 use crate::process_registry::{ProcessRegistry, ProcessRegistryWriter};
 use crate::process_worker::ProcessWorker;
+use crate::system_registry::SystemRegistry;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
@@ -103,7 +104,8 @@ impl Deref for RuntimeContext {
 
 pub struct RuntimeContextShared {
     pub config: RuntimeConfig,
-    pub registry: ProcessRegistry,
+    pub process_registry: ProcessRegistry,
+    pub system_registry: SystemRegistry,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -112,19 +114,24 @@ pub struct RuntimeContextShared {
 /// Responsible for orchestrating process workers, collectors and storage
 pub struct Runtime {
     context: RuntimeContext,
-    registry_writer: ProcessRegistryWriter,
+    process_registry_writer: ProcessRegistryWriter,
 }
 
 impl Runtime {
     ////////////////////////////////////////////////////////////////////////////////
     /// Create new runtime instance
     pub fn new(config: RuntimeConfig) -> Self {
-        let (registry, registry_writer) = ProcessRegistry::new();
-        let context = RuntimeContext(Arc::new(RuntimeContextShared { config, registry }));
+        let (process_registry, process_registry_writer) = ProcessRegistry::new();
+        let system_registry = SystemRegistry::new();
+        let context = RuntimeContext(Arc::new(RuntimeContextShared {
+            config,
+            process_registry,
+            system_registry,
+        }));
 
         Self {
             context,
-            registry_writer,
+            process_registry_writer,
         }
     }
 
@@ -136,8 +143,14 @@ impl Runtime {
 
     ////////////////////////////////////////////////////////////////////////////////
     /// Return process registry used by this runtime
-    pub fn registry(&self) -> ProcessRegistry {
-        self.context.registry.clone()
+    pub fn process_registry(&self) -> ProcessRegistry {
+        self.context.process_registry.clone()
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    /// Return system registry used by this runtime
+    pub fn system_registry(&self) -> SystemRegistry {
+        self.context.system_registry.clone()
     }
 
     ////////////////////////////////////////////////////////////////////////////////
@@ -169,7 +182,7 @@ impl Runtime {
                     }
 
                     // previous worker state is not valid anymore, subscribers observe removal
-                    self.registry_writer.clear_all_processes();
+                    self.process_registry_writer.clear_all_processes();
 
                     info!("process worker restarting in {WORKER_RESTART_DELAY:?}");
                     process_workers.spawn(self.build_process_worker(Some(WORKER_RESTART_DELAY)));
@@ -191,13 +204,13 @@ impl Runtime {
         start_delay: Option<Duration>,
     ) -> impl Future<Output = ()> + 'static {
         let context = self.context.clone();
-        let registry = self.registry_writer.clone();
+        let process_registry_writer = self.process_registry_writer.clone();
 
         async move {
             if let Some(start_delay) = start_delay {
                 tokio::time::sleep(start_delay).await;
             }
-            ProcessWorker::run(context, registry).await
+            ProcessWorker::run(context, process_registry_writer).await
         }
     }
 
