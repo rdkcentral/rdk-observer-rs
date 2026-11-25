@@ -34,6 +34,7 @@
 use crate::collector_cpu::{read_process_cpu, read_system_cpu};
 use crate::collector_io::{read_process_io, read_system_io};
 use crate::collector_memory::{read_process_memory, read_system_memory};
+use crate::collector_pressure::read_system_pressure;
 use crate::output_model::{
     BlockDeviceIdentity, CpuCounters, CpuUtilization, IoRates, ObservationRecord, ProcessIdentity,
     ResourceRecord, StorageCounters, SystemCpuCounters, SystemRecord, SystemResourceRecord,
@@ -212,6 +213,9 @@ impl SystemWorker {
             if let Err(e) = this.collect_memory().await {
                 error!("memory collector failed: {e}");
             }
+            if let Err(e) = this.collect_pressure().await {
+                error!("pressure collector failed: {e}");
+            }
         }
     }
 
@@ -343,6 +347,25 @@ impl SystemWorker {
                 timestamp_unix_ns: ts_unix_epoch.as_nanos() as u64,
                 timestamp_monotonic_ns: ts_monotonic.as_nanos() as u64,
                 resource: SystemResourceRecord::Memory(record),
+            }))
+            .await?;
+
+        Ok(())
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    async fn collect_pressure(&mut self) -> anyhow::Result<()> {
+        trace!("collecting pressure");
+
+        let record = spawn_blocking(read_system_pressure).await??;
+        let ts_monotonic = get_monotonic_time();
+        let ts_unix_epoch = get_unix_epoch_time();
+
+        self.events_tx
+            .send(CollectorEvent::System(SystemRecord {
+                timestamp_unix_ns: ts_unix_epoch.as_nanos() as u64,
+                timestamp_monotonic_ns: ts_monotonic.as_nanos() as u64,
+                resource: SystemResourceRecord::Pressure(record),
             }))
             .await?;
 
