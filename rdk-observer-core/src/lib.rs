@@ -45,3 +45,4 @@ pub mod process_filter;
 pub mod process_registry;
 pub mod process_worker;
 pub mod runtime;
+pub mod system_registry;

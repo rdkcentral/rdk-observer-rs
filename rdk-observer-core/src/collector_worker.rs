@@ -81,7 +81,8 @@ impl CollectorWorker {
         context: RuntimeContext,
         events_tx: tokio::sync::mpsc::Sender<CollectorEvent>,
     ) {
-        let (snapshot, mut registry_events_rx) = context.registry.subscribe_with_snapshot();
+        let (snapshot, mut process_registry_events_rx) =
+            context.process_registry.subscribe_with_snapshot();
 
         let mut this = Self {
             context,
@@ -96,16 +97,16 @@ impl CollectorWorker {
 
         loop {
             select! {
-                event = registry_events_rx.recv() => match event {
-                    Ok(e) => this.handle_registry_event(e),
+                event = process_registry_events_rx.recv() => match event {
+                    Ok(e) => this.handle_process_registry_event(e),
                     Err(RecvError::Lagged(count)) => {
-                        warn!("missed {count} registry events, resyncing");
-                        let (snapshot, rx) = this.context.registry.subscribe_with_snapshot();
-                        registry_events_rx = rx;
+                        warn!("missed {count} process registry events, resyncing");
+                        let (snapshot, rx) = this.context.process_registry.subscribe_with_snapshot();
+                        process_registry_events_rx = rx;
                         this.sync_processes(snapshot);
                     }
                     Err(RecvError::Closed) => {
-                        return info!("registry closed, stopping the worker");
+                        return info!("process registry closed, stopping the worker");
                     }
                 },
                 _ = events_tx.closed() => {
@@ -139,7 +140,7 @@ impl CollectorWorker {
     }
 
     ////////////////////////////////////////////////////////////////////////////////
-    fn handle_registry_event(&mut self, event: ProcessRegistryEvent) {
+    fn handle_process_registry_event(&mut self, event: ProcessRegistryEvent) {
         match event {
             ProcessRegistryEvent::Started(e) => self.handle_process_started(e),
             ProcessRegistryEvent::Finished(e) => self.handle_process_finished(e),
@@ -174,6 +175,7 @@ impl CollectorWorker {
 
 ////////////////////////////////////////////////////////////////////////////////
 struct SystemWorker {
+    context: RuntimeContext,
     events_tx: tokio::sync::mpsc::Sender<CollectorEvent>,
     last_cpu_record: Option<(Duration, SystemCpuCounters)>,
     last_io_records: Option<(
@@ -192,6 +194,7 @@ impl SystemWorker {
         interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         let mut this = Self {
+            context,
             events_tx,
             last_cpu_record: None,
             last_io_records: None,
@@ -273,13 +276,13 @@ impl SystemWorker {
                 .collect(),
         ));
 
-        self.events_tx
-            .send(CollectorEvent::System(SystemRecord {
-                timestamp_unix_ns: ts_unix_epoch.as_nanos() as u64,
-                timestamp_monotonic_ns: ts_monotonic.as_nanos() as u64,
-                resource: SystemResourceRecord::Storage(records),
-            }))
-            .await?;
+        let record = SystemRecord {
+            timestamp_unix_ns: ts_unix_epoch.as_nanos() as u64,
+            timestamp_monotonic_ns: ts_monotonic.as_nanos() as u64,
+            resource: SystemResourceRecord::Storage(records),
+        };
+        self.context.system_registry.update(&record);
+        self.events_tx.send(CollectorEvent::System(record)).await?;
 
         Ok(())
     }
@@ -323,13 +326,13 @@ impl SystemWorker {
         }
 
         self.last_cpu_record = Some((ts_monotonic, record.counters.clone()));
-        self.events_tx
-            .send(CollectorEvent::System(SystemRecord {
-                timestamp_unix_ns: ts_unix_epoch.as_nanos() as u64,
-                timestamp_monotonic_ns: ts_monotonic.as_nanos() as u64,
-                resource: SystemResourceRecord::Cpu(record),
-            }))
-            .await?;
+        let record = SystemRecord {
+            timestamp_unix_ns: ts_unix_epoch.as_nanos() as u64,
+            timestamp_monotonic_ns: ts_monotonic.as_nanos() as u64,
+            resource: SystemResourceRecord::Cpu(record),
+        };
+        self.context.system_registry.update(&record);
+        self.events_tx.send(CollectorEvent::System(record)).await?;
 
         Ok(())
     }
@@ -342,13 +345,13 @@ impl SystemWorker {
         let ts_monotonic = get_monotonic_time();
         let ts_unix_epoch = get_unix_epoch_time();
 
-        self.events_tx
-            .send(CollectorEvent::System(SystemRecord {
-                timestamp_unix_ns: ts_unix_epoch.as_nanos() as u64,
-                timestamp_monotonic_ns: ts_monotonic.as_nanos() as u64,
-                resource: SystemResourceRecord::Memory(record),
-            }))
-            .await?;
+        let record = SystemRecord {
+            timestamp_unix_ns: ts_unix_epoch.as_nanos() as u64,
+            timestamp_monotonic_ns: ts_monotonic.as_nanos() as u64,
+            resource: SystemResourceRecord::Memory(record),
+        };
+        self.context.system_registry.update(&record);
+        self.events_tx.send(CollectorEvent::System(record)).await?;
 
         Ok(())
     }
@@ -423,7 +426,7 @@ impl PerPidWorker {
                 }
             }
 
-            this.update_registry_from_events();
+            this.update_process_registry_from_events();
 
             for event in this.pending_events.drain(..) {
                 if events_tx.send(event).await.is_err() {
@@ -446,8 +449,8 @@ impl PerPidWorker {
     }
 
     ////////////////////////////////////////////////////////////////////////////////
-    /// Stores the latest records of this frame in the registry with a single lock
-    fn update_registry_from_events(&self) {
+    /// Stores the latest records of this frame in the process registry with a single lock
+    fn update_process_registry_from_events(&self) {
         let (mut io, mut cpu, mut memory) = (None, None, None);
 
         for event in &self.pending_events {
@@ -472,17 +475,19 @@ impl PerPidWorker {
 
         // 1. all records are cloned outside the lock to reduce locked time
         // 2. records that failed this frame keep their previous value
-        self.context.registry.update_process(&self.process, |e| {
-            if let Some(io) = io {
-                e.last_io_record = Some(io);
-            }
-            if let Some(cpu) = cpu {
-                e.last_cpu_record = Some(cpu);
-            }
-            if let Some(memory) = memory {
-                e.last_memory_record = Some(memory);
-            }
-        });
+        self.context
+            .process_registry
+            .update_process(&self.process, |e| {
+                if let Some(io) = io {
+                    e.last_io_record = Some(io);
+                }
+                if let Some(cpu) = cpu {
+                    e.last_cpu_record = Some(cpu);
+                }
+                if let Some(memory) = memory {
+                    e.last_memory_record = Some(memory);
+                }
+            });
     }
 
     ////////////////////////////////////////////////////////////////////////////////

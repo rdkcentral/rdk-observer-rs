@@ -76,12 +76,12 @@ async fn main() -> anyhow::Result<()> {
     });
 
     #[cfg(feature = "rbus")]
-    let _handle = rbus::RBusConnection::open(runtime.registry());
+    let _handle = rbus::RBusConnection::open(runtime.process_registry());
 
     let mut join_set = JoinSet::new();
 
     #[cfg(feature = "tui")]
-    join_set.spawn(tui::run(runtime.registry()));
+    join_set.spawn(tui::run(runtime.process_registry()));
     join_set.spawn(runtime.run());
 
     if let Some(result) = join_set.join_next().await {
