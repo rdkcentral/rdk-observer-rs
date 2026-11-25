@@ -364,13 +364,13 @@ impl SystemWorker {
         let ts_monotonic = get_monotonic_time();
         let ts_unix_epoch = get_unix_epoch_time();
 
-        self.events_tx
-            .send(CollectorEvent::System(SystemRecord {
-                timestamp_unix_ns: ts_unix_epoch.as_nanos() as u64,
-                timestamp_monotonic_ns: ts_monotonic.as_nanos() as u64,
-                resource: SystemResourceRecord::Pressure(record),
-            }))
-            .await?;
+        let record = SystemRecord {
+            timestamp_unix_ns: ts_unix_epoch.as_nanos() as u64,
+            timestamp_monotonic_ns: ts_monotonic.as_nanos() as u64,
+            resource: SystemResourceRecord::Pressure(record),
+        };
+        self.context.system_registry.update(&record);
+        self.events_tx.send(CollectorEvent::System(record)).await?;
 
         Ok(())
     }
