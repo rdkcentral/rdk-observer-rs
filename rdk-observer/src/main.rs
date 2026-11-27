@@ -81,7 +81,7 @@ async fn main() -> anyhow::Result<()> {
     let mut join_set = JoinSet::new();
 
     #[cfg(feature = "tui")]
-    join_set.spawn(tui::run(runtime.process_registry()));
+    join_set.spawn(tui::run(runtime.context()));
     join_set.spawn(runtime.run());
 
     if let Some(result) = join_set.join_next().await {
